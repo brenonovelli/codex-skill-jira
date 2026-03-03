@@ -1,42 +1,42 @@
 # Jira Codex Skill (`$jira`)
 
-Generate technical planning docs from a Jira issue key or URL.
+Gere documentos de planejamento técnico a partir de uma chave ou URL de issue no Jira.
 
-## Install Globally (Codex-first)
+## Instalação Global (Codex-first)
 
-In interactive Codex:
+No Codex interativo:
 
 ```text
 Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira
 ```
 
-Or from terminal with Codex:
+Ou pelo terminal com Codex:
 
 ```bash
 codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
 ```
 
-Note: use single quotes in `codex exec` so the shell does not expand `$skill-installer`.
+Nota: use aspas simples no `codex exec` para o shell não expandir `$skill-installer`.
 
-Why these flags:
-- `--skip-git-repo-check`: allows global installation outside a trusted Git directory.
-- `-s workspace-write`: avoids `read-only` sandbox failures during installation.
-- `--add-dir "$HOME/.codex"` and `--add-dir /tmp`: grants write access for target and temp directories.
+Por que essas flags:
+- `--skip-git-repo-check`: permite instalação global fora de um diretório Git confiável.
+- `-s workspace-write`: evita falhas do sandbox `read-only` durante a instalação.
+- `--add-dir "$HOME/.codex"` e `--add-dir /tmp`: libera escrita no destino e em diretórios temporários.
 
-If your environment still blocks writes, use:
+Se seu ambiente ainda bloquear escrita, use:
 
 ```bash
 codex exec --skip-git-repo-check -s danger-full-access 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
 ```
 
-If your environment blocks access to `github.com`, install from a local clone:
+Se seu ambiente bloquear acesso ao `github.com`, instale a partir de um clone local:
 
 ```bash
 mkdir -p ~/.codex/skills/jira
 rsync -a --delete --exclude '.git' '/path/to/codex-skill-jira/' ~/.codex/skills/jira/
 ```
 
-If you get:
+Se aparecer:
 
 ```text
 Not inside a trusted directory and --skip-git-repo-check was not specified.
@@ -48,48 +48,48 @@ use:
 codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
 ```
 
-Why this happens: `codex exec` enforces a trusted-directory check (usually a Git repo) before running commands. Skill installation is global, so bypassing that check is expected for this step.
+Por que isso acontece: o `codex exec` exige verificação de diretório confiável (geralmente um repositório Git) antes de rodar comandos. Como a instalação da skill é global, pular essa verificação nesse caso é esperado.
 
-After installation, restart Codex.
+Depois da instalação, reinicie o Codex.
 
-## Project Setup
+## Configuração do Projeto
 
-Ask Codex to configure global credentials for `$jira`:
+Peça ao Codex para configurar as credenciais globais do `$jira`:
 
 ```text
 Configure Jira credentials for $jira
 ```
 
-Codex will ask for:
+O Codex vai pedir:
 - `JIRA_BASE_URL`
 - `JIRA_EMAIL`
 - `JIRA_API_TOKEN`
 
-Credentials are stored in the global skill file:
+As credenciais são salvas no arquivo global da skill:
 
 ```text
 ~/.codex/skills/jira/.env.local
 ```
 
-## Use
+## Uso
 
-Inside any project:
+Dentro de qualquer projeto:
 
 ```text
 $jira VA-1234
 ```
 
-Or mention the issue naturally:
-- `Let's work on VA-1234`
-- `Please plan https://company.atlassian.net/browse/VA-1234`
+Ou mencione a issue de forma natural:
+- `Vamos trabalhar na VA-1234`
+- `Planeje https://company.atlassian.net/browse/VA-1234`
 
-## Output Files
+## Arquivos Gerados
 
 - `docs/<ISSUE>-spec.md`
 - `docs/<ISSUE>-implementation-plan.md`
 - `docs/<ISSUE>-checklist.md`
 - `docs/<ISSUE>-jira-summary.md`
 
-## More Details
+## Mais Detalhes
 
-See `docs/WORKSPACE_GUIDE.md`.
+Veja `docs/WORKSPACE_GUIDE.md`.
