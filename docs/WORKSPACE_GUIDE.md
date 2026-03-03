@@ -16,10 +16,42 @@ Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira
 ### Terminal with Codex
 
 ```bash
-codex exec 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
+codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
 ```
 
 Note: use single quotes so the shell does not expand `$skill-installer`.
+
+Why these flags:
+- `--skip-git-repo-check`: allows global install outside a trusted Git directory.
+- `-s workspace-write`: avoids `read-only` sandbox failures during install.
+- `--add-dir "$HOME/.codex"` and `--add-dir /tmp`: grants access to the destination and temp dirs.
+
+If write restrictions persist, use:
+
+```bash
+codex exec --skip-git-repo-check -s danger-full-access 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
+```
+
+If access to `github.com` is blocked, sync from a local clone:
+
+```bash
+mkdir -p ~/.codex/skills/jira
+rsync -a --delete --exclude '.git' '/path/to/codex-skill-jira/' ~/.codex/skills/jira/
+```
+
+If you get:
+
+```text
+Not inside a trusted directory and --skip-git-repo-check was not specified.
+```
+
+use:
+
+```bash
+codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
+```
+
+Why this happens: `codex exec` checks whether you are in a trusted directory (typically a Git repository). Global skill installation is not tied to one repository, so bypassing the check here is normal.
 
 After installation, restart Codex.
 
