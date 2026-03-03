@@ -1,0 +1,57 @@
+# Jira Workspace Instructions
+
+## Objective
+
+Use this repository as a conversational Jira workspace.
+When the user starts discussing a Jira issue, run the Jira planning flow automatically.
+
+## Trigger
+
+Start the Jira flow when at least one condition is true:
+- User message contains a Jira key like `VA-1462` (`[A-Z][A-Z0-9]+-[0-9]+`).
+- User message contains a Jira URL with `/browse/<KEY>`.
+- User explicitly asks to plan/execute work from a Jira issue.
+
+## Conversational Flow (deterministic)
+
+Collect values in this fixed order, asking one question at a time only for missing values:
+1. `issue` (required): Jira key or URL.
+2. `mode`: `plan` (default) or `run`.
+3. `workspace`: `feature-folder` (default) or `current-folder`.
+4. `clone`: `ask` (default), `auto`, or `off`.
+
+Validation rules:
+- Reject invalid values and reprompt with allowed values.
+- Do not proceed without `issue`.
+- Before execution, show a short summary and ask explicit confirmation.
+
+## Execution
+
+Always execute the same backend command:
+
+```bash
+scripts/jira_bootstrap.sh --issue "<ISSUE>" --mode "<MODE>" --workspace "<WORKSPACE>" --clone "<CLONE>"
+```
+
+If the user provides a local Jira JSON fixture, append:
+
+```bash
+--issue-json "<PATH>"
+```
+
+## Output Contract
+
+Generate exactly these files in the selected workspace:
+- `docs/<ISSUE>-spec.md`
+- `docs/<ISSUE>-implementation-plan.md`
+- `docs/<ISSUE>-checklist.md`
+- `docs/<ISSUE>-jira-summary.md`
+
+## Fallbacks
+
+- If Jira credentials are missing and no `--issue-json` is provided, stop and ask user to configure credentials (`.env`, `.env.local`, or `--env-file`).
+- If user asks for non-interactive execution, run directly with explicit flags and skip questions.
+
+## Tone
+
+Default to concise Portuguese when user writes in Portuguese.
