@@ -13,7 +13,7 @@ MODE_SET=0
 WORKSPACE_SET=0
 CLONE_SET=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SKILL_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 JIRA_GET_SCRIPT="${SCRIPT_DIR}/jira_get_issue.sh"
 
 usage() {
@@ -28,10 +28,8 @@ Credentials:
   If --issue-json is not provided, Jira credentials are required.
   The script loads credentials from:
   1) --env-file
-  2) <workspace>/.env
-  3) <workspace>/.env.local
-  4) ./.env
-  5) ./.env.local
+  2) <skill-root>/.env
+  3) <skill-root>/.env.local
 
 Examples:
   jira_bootstrap.sh --issue VA-1462
@@ -59,12 +57,8 @@ load_env_defaults() {
     return
   fi
 
-  load_env_file "${WORKSPACE_ROOT}/.env"
-  load_env_file "${WORKSPACE_ROOT}/.env.local"
-  if [[ "${PWD}" != "${WORKSPACE_ROOT}" ]]; then
-    load_env_file "${PWD}/.env"
-    load_env_file "${PWD}/.env.local"
-  fi
+  load_env_file "${SKILL_ROOT}/.env"
+  load_env_file "${SKILL_ROOT}/.env.local"
 }
 
 is_valid_mode() {
@@ -255,7 +249,7 @@ if [[ -n "${ISSUE_JSON_FILE}" ]]; then
   ISSUE_JSON="$("${JIRA_GET_SCRIPT}" --issue "${ISSUE}" --input-file "${ISSUE_JSON_FILE}")"
 else
   if [[ -z "${JIRA_BASE_URL:-}" || -z "${JIRA_EMAIL:-}" || -z "${JIRA_API_TOKEN:-}" ]]; then
-    echo "Missing Jira credentials. Provide JIRA_BASE_URL, JIRA_EMAIL and JIRA_API_TOKEN in .env/.env.local or pass --env-file." >&2
+    echo "Missing Jira credentials. Configure ${SKILL_ROOT}/.env.local (or .env), or pass --env-file." >&2
     echo "Alternative for offline mode: pass --issue-json <file>." >&2
     exit 1
   fi

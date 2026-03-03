@@ -1,96 +1,67 @@
-# Jira Workspace Guide
+# Jira Skill Guide
 
-## What this repository is
+## Overview
 
-This repository is a Jira-focused Codex workspace.
-Its main goal is to turn a Jira issue (`KEY` or URL) into technical planning artifacts.
+This repository provides a global Codex skill named `$jira`.
+Use it to convert a Jira issue key or URL into technical planning documents.
 
-The conversational behavior is defined in `AGENTS.md`.
-The deterministic backend is implemented by scripts in `scripts/`.
+## Install Globally
 
-## Setup
+### Interactive Codex (recommended)
 
-1. Open Codex in this repository.
-2. Configure Jira credentials by copying `.env.example` to `.env` (or `.env.local`):
-
-```bash
-cp .env.example .env
+```text
+Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira
 ```
 
-3. Fill:
+### Terminal with Codex
 
 ```bash
-JIRA_BASE_URL="https://yourcompany.atlassian.net"
-JIRA_EMAIL="you@company.com"
-JIRA_API_TOKEN="your_api_token_here"
+codex exec 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
 ```
 
-Notes:
-- `.env` and `.env.local` are ignored by git.
-- You can also provide an explicit credentials file with `--env-file`.
+Note: use single quotes so the shell does not expand `$skill-installer`.
 
-## Conversational flow
+After installation, restart Codex.
 
-You can start with any sentence that mentions the issue key or Jira URL, for example:
-- `Let's work on VA-123`
-- `Help me with VA-123`
-- `Please plan https://company.atlassian.net/browse/VA-123`
-- `Work on ticket VA-123 in run mode`
+## Project Configuration
 
-If values are missing, the flow asks for:
-1. `issue`
-2. `mode` (`plan` or `run`)
-3. `workspace` (`feature-folder` or `current-folder`)
-4. `clone` (`ask`, `auto`, or `off`)
+Ask Codex to configure credentials globally:
 
-Then it asks for confirmation and executes.
-
-## CLI usage
-
-### Recommended entrypoint
-
-```bash
-scripts/codex-jira [ISSUE] [flags...]
+```text
+Configure Jira credentials for $jira
 ```
 
-Examples:
+Codex should collect:
+- `JIRA_BASE_URL`
+- `JIRA_EMAIL`
+- `JIRA_API_TOKEN`
 
-```bash
-scripts/codex-jira VA-123
-scripts/codex-jira VA-123 --mode run --workspace current-folder --clone off
-scripts/codex-jira --issue-json /tmp/VA-123.raw.json
+And store them in:
+
+```text
+~/.codex/skills/jira/.env.local
 ```
 
-### Full backend command
+Credentials behavior:
+- If Jira credentials are missing, the flow stops with an explicit error.
+- Offline fixture mode is supported when the skill receives a local Jira JSON input.
 
-```bash
-scripts/jira_bootstrap.sh --issue <KEY|URL> [--mode plan|run] [--workspace feature-folder|current-folder] [--clone ask|auto|off] [--issue-json <jira-issue.json>] [--env-file <path>]
+## Usage
+
+Call the skill directly:
+
+```text
+$jira VA-1234
 ```
 
-CLI options:
-- `--issue` (required): Jira key (`VA-123`) or Jira issue URL.
-- `--mode`: `plan` (docs only, default) or `run` (docs + optional clone).
-- `--workspace`: `feature-folder` (default) or `current-folder`.
-- `--clone`: `ask` (default), `auto`, or `off`.
-- `--issue-json`: offline fixture mode (skips Jira API call).
-- `--env-file`: explicit env file with Jira credentials.
+You can also mention issues naturally in conversation:
+- `Let's work on VA-1234`
+- `Help me with VA-1234`
+- `Please plan https://company.atlassian.net/browse/VA-1234`
 
-## Credentials behavior
+## Generated Files
 
-- If `--issue-json` is provided, Jira credentials are not required.
-- If `--issue-json` is not provided, credentials are required.
-- Without credentials and without `--issue-json`, the command exits with an error.
-
-Credential loading order:
-1. `--env-file <path>`
-2. `<workspace>/.env`
-3. `<workspace>/.env.local`
-4. `./.env`
-5. `./.env.local`
-
-## Output files
-
-The flow generates:
+For each issue:
 - `docs/<ISSUE>-spec.md`
 - `docs/<ISSUE>-implementation-plan.md`
 - `docs/<ISSUE>-checklist.md`

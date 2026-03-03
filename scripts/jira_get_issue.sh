@@ -7,7 +7,7 @@ OUTPUT_FILE=""
 INPUT_FILE=""
 ENV_FILE=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SKILL_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 usage() {
   cat <<'EOF'
@@ -21,10 +21,8 @@ Environment (required when --input-file is not used):
 
 Credential loading order:
   1) --env-file
-  2) <workspace>/.env
-  3) <workspace>/.env.local
-  4) ./.env
-  5) ./.env.local
+  2) <skill-root>/.env
+  3) <skill-root>/.env.local
 EOF
 }
 
@@ -47,12 +45,8 @@ load_env_defaults() {
     return
   fi
 
-  load_env_file "${WORKSPACE_ROOT}/.env"
-  load_env_file "${WORKSPACE_ROOT}/.env.local"
-  if [[ "${PWD}" != "${WORKSPACE_ROOT}" ]]; then
-    load_env_file "${PWD}/.env"
-    load_env_file "${PWD}/.env.local"
-  fi
+  load_env_file "${SKILL_ROOT}/.env"
+  load_env_file "${SKILL_ROOT}/.env.local"
 }
 
 while [[ $# -gt 0 ]]; do

@@ -1,68 +1,63 @@
-# Jira Codex Workspace
+# Jira Codex Skill (`$jira`)
 
-Turn a Jira issue (`KEY` or URL) into technical planning docs with a conversational or CLI flow.
+Generate technical planning docs from a Jira issue key or URL.
 
-## Global Skill Install (`$jira`)
+## Install Globally (Codex-first)
 
-After publishing this repo on GitHub, install it globally in Codex:
+In interactive Codex:
 
-```bash
-python3 "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py" \
-  --repo <owner>/<repo> \
-  --path . \
-  --name jira
+```text
+Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira
 ```
 
-Restart Codex after installation.
+Or from terminal with Codex:
 
-Then, inside any project, you can invoke:
+```bash
+codex exec 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
+```
+
+Note: use single quotes in `codex exec` so the shell does not expand `$skill-installer`.
+
+After installation, restart Codex.
+
+## Project Setup
+
+Ask Codex to configure global credentials for `$jira`:
+
+```text
+Configure Jira credentials for $jira
+```
+
+Codex will ask for:
+- `JIRA_BASE_URL`
+- `JIRA_EMAIL`
+- `JIRA_API_TOKEN`
+
+Credentials are stored in the global skill file:
+
+```text
+~/.codex/skills/jira/.env.local
+```
+
+## Use
+
+Inside any project:
 
 ```text
 $jira VA-1234
 ```
 
-## Quick Setup
+Or mention the issue naturally:
+- `Let's work on VA-1234`
+- `Please plan https://company.atlassian.net/browse/VA-1234`
 
-```bash
-cp .env.example .env
-```
-
-Fill `.env`:
-
-```bash
-JIRA_BASE_URL="https://yourcompany.atlassian.net"
-JIRA_EMAIL="you@company.com"
-JIRA_API_TOKEN="your_api_token_here"
-```
-
-## Quick Usage
-
-### Conversational
-
-Open Codex in this repository and say something that mentions the issue:
-- `Let's work on VA-123`
-- `Please plan https://company.atlassian.net/browse/VA-123`
-
-### CLI
-
-```bash
-scripts/codex-jira VA-123
-scripts/codex-jira VA-123 --mode run --workspace current-folder --clone off
-```
-
-Offline fixture mode:
-
-```bash
-scripts/codex-jira VA-123 --issue-json /tmp/VA-123.raw.json
-```
-
-## Generated Files
+## Output Files
 
 - `docs/<ISSUE>-spec.md`
 - `docs/<ISSUE>-implementation-plan.md`
 - `docs/<ISSUE>-checklist.md`
 - `docs/<ISSUE>-jira-summary.md`
 
-## Full Documentation
+## More Details
 
-For complete CLI reference and behavior details, see `docs/WORKSPACE_GUIDE.md`.
+See `docs/WORKSPACE_GUIDE.md`.
