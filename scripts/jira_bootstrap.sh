@@ -6,12 +6,9 @@ ISSUE=""
 MODE="plan"
 WORKSPACE_STRATEGY="feature-folder"
 CLONE_POLICY="ask"
+CONFIRM_POLICY="off"
 ISSUE_JSON_FILE=""
 ENV_FILE=""
-ISSUE_SET=0
-MODE_SET=0
-WORKSPACE_SET=0
-CLONE_SET=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 JIRA_GET_SCRIPT="${SCRIPT_DIR}/jira_get_issue.sh"
@@ -19,10 +16,12 @@ JIRA_GET_SCRIPT="${SCRIPT_DIR}/jira_get_issue.sh"
 usage() {
   cat <<'EOF'
 Usage:
-  jira_bootstrap.sh --issue <KEY|URL> [--mode plan|run] [--workspace feature-folder|current-folder] [--clone ask|auto|off] [--issue-json <jira-issue.json>] [--env-file <path>]
+  jira_bootstrap.sh --issue <KEY|URL> [--mode plan|run] [--workspace feature-folder|current-folder] [--clone ask|auto|off] [--confirm ask|off] [--issue-json <jira-issue.json>] [--env-file <path>]
 
-Interactive mode:
-  If run in a terminal and some flags are omitted, the script asks for missing values.
+Behavior:
+  - Defaults: --mode plan --workspace feature-folder --clone ask --confirm off
+  - No interactive prompts are shown by default.
+  - Use --confirm ask to request interactive confirmation before execution.
 
 Credentials:
   If --issue-json is not provided, Jira credentials are required.
@@ -34,6 +33,7 @@ Credentials:
 Examples:
   jira_bootstrap.sh --issue VA-1462
   jira_bootstrap.sh --issue https://company.atlassian.net/browse/VA-1462 --mode run --clone ask
+  jira_bootstrap.sh --issue VA-1462 --confirm ask
   jira_bootstrap.sh --issue VA-1462 --issue-json /tmp/VA-1462.raw.json
 EOF
 }
@@ -76,91 +76,35 @@ is_valid_clone_policy() {
   [[ "${value}" == "ask" || "${value}" == "auto" || "${value}" == "off" ]]
 }
 
-prompt_with_default() {
-  local prompt="$1"
-  local default_value="$2"
-  local user_value=""
-  if ! read -r -p "${prompt} [${default_value}]: " user_value; then
-    printf '%s\n' "${default_value}"
-    return
-  fi
-  if [[ -z "${user_value}" ]]; then
-    printf '%s\n' "${default_value}"
-  else
-    printf '%s\n' "${user_value}"
-  fi
+is_valid_confirm_policy() {
+  local value="${1:-}"
+  [[ "${value}" == "ask" || "${value}" == "off" ]]
 }
 
-interactive_setup_if_needed() {
-  local missing_any=0
+confirm_if_requested() {
   local answer=""
 
-  [[ -z "${ISSUE}" ]] && missing_any=1
-  [[ "${MODE_SET}" -eq 0 ]] && missing_any=1
-  [[ "${WORKSPACE_SET}" -eq 0 ]] && missing_any=1
-  [[ "${CLONE_SET}" -eq 0 ]] && missing_any=1
-
-  if [[ "${missing_any}" -eq 0 || ! -t 0 || ! -t 1 ]]; then
+  if [[ "${CONFIRM_POLICY}" != "ask" ]]; then
     return
   fi
 
-  echo "Interactive setup:"
-  if [[ -z "${ISSUE}" ]]; then
-    while [[ -z "${ISSUE}" ]]; do
-      if ! read -r -p "Issue key or URL (required): " ISSUE; then
-        echo "Aborted."
-        exit 1
-      fi
-      if [[ -z "${ISSUE}" ]]; then
-        echo "Issue is required."
-      fi
-    done
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    echo "--confirm ask requires an interactive terminal." >&2
+    exit 1
   fi
 
-  if [[ "${MODE_SET}" -eq 0 ]]; then
-    while true; do
-      MODE="$(prompt_with_default "Mode (plan/run)" "${MODE}")"
-      if is_valid_mode "${MODE}"; then
-        break
-      fi
-      echo "Invalid mode: ${MODE}. Use plan or run."
-    done
-  fi
-
-  if [[ "${WORKSPACE_SET}" -eq 0 ]]; then
-    while true; do
-      WORKSPACE_STRATEGY="$(prompt_with_default "Workspace (feature-folder/current-folder)" "${WORKSPACE_STRATEGY}")"
-      if is_valid_workspace "${WORKSPACE_STRATEGY}"; then
-        break
-      fi
-      echo "Invalid workspace: ${WORKSPACE_STRATEGY}. Use feature-folder or current-folder."
-    done
-  fi
-
-  if [[ "${CLONE_SET}" -eq 0 ]]; then
-    while true; do
-      CLONE_POLICY="$(prompt_with_default "Clone policy (ask/auto/off)" "${CLONE_POLICY}")"
-      if is_valid_clone_policy "${CLONE_POLICY}"; then
-        break
-      fi
-      echo "Invalid clone policy: ${CLONE_POLICY}. Use ask, auto or off."
-    done
-  fi
-
-  echo "Confirm values:"
+  echo "Execution summary:"
   echo "- Issue: ${ISSUE}"
   echo "- Mode: ${MODE}"
   echo "- Workspace: ${WORKSPACE_STRATEGY}"
   echo "- Clone policy: ${CLONE_POLICY}"
-  if ! read -r -p "Continue? [Y/n] " answer; then
+  if ! read -r -p "Continue? [y/N] " answer; then
     echo "Aborted."
     exit 1
   fi
   case "${answer}" in
-    n|N|no|NO)
-      echo "Aborted."
-      exit 1
-      ;;
+    y|Y|yes|YES) ;;
+    *) echo "Aborted."; exit 1 ;;
   esac
 }
 
@@ -168,22 +112,22 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --issue)
       ISSUE="${2:-}"
-      ISSUE_SET=1
       shift 2
       ;;
     --mode)
       MODE="${2:-}"
-      MODE_SET=1
       shift 2
       ;;
     --workspace)
       WORKSPACE_STRATEGY="${2:-}"
-      WORKSPACE_SET=1
       shift 2
       ;;
     --clone)
       CLONE_POLICY="${2:-}"
-      CLONE_SET=1
+      shift 2
+      ;;
+    --confirm)
+      CONFIRM_POLICY="${2:-}"
       shift 2
       ;;
     --issue-json)
@@ -207,10 +151,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 load_env_defaults
-interactive_setup_if_needed
 
 if [[ -z "${ISSUE}" ]]; then
-  echo "Missing --issue (or run interactively to provide it)."
+  echo "Missing --issue."
   usage
   exit 1
 fi
@@ -230,6 +173,13 @@ if ! is_valid_clone_policy "${CLONE_POLICY}"; then
   exit 1
 fi
 
+if ! is_valid_confirm_policy "${CONFIRM_POLICY}"; then
+  echo "Invalid --confirm: ${CONFIRM_POLICY}"
+  exit 1
+fi
+
+confirm_if_requested
+
 if [[ "${ISSUE}" =~ /browse/([A-Za-z0-9]+-[0-9]+) ]]; then
   ISSUE_KEY_INPUT="${BASH_REMATCH[1]}"
 else
@@ -246,7 +196,7 @@ fi
 
 ISSUE_JSON=""
 if [[ -n "${ISSUE_JSON_FILE}" ]]; then
-  ISSUE_JSON="$("${JIRA_GET_SCRIPT}" --issue "${ISSUE}" --input-file "${ISSUE_JSON_FILE}")"
+  ISSUE_JSON="$(bash "${JIRA_GET_SCRIPT}" --issue "${ISSUE}" --input-file "${ISSUE_JSON_FILE}")"
 else
   if [[ -z "${JIRA_BASE_URL:-}" || -z "${JIRA_EMAIL:-}" || -z "${JIRA_API_TOKEN:-}" ]]; then
     echo "Missing Jira credentials. Configure ${SKILL_ROOT}/.env.local (or .env), or pass --env-file." >&2
@@ -257,7 +207,7 @@ else
   if [[ -n "${ENV_FILE}" ]]; then
     JIRA_GET_ARGS+=(--env-file "${ENV_FILE}")
   fi
-  ISSUE_JSON="$("${JIRA_GET_SCRIPT}" "${JIRA_GET_ARGS[@]}")"
+  ISSUE_JSON="$(bash "${JIRA_GET_SCRIPT}" "${JIRA_GET_ARGS[@]}")"
 fi
 
 ISSUE_KEY="$(printf '%s' "${ISSUE_JSON}" | jq -r '.key')"

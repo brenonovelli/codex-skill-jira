@@ -14,23 +14,28 @@ Start the Jira flow when at least one condition is true:
 
 ## Conversational Flow (deterministic)
 
-Collect values in this fixed order, asking one question at a time only for missing values:
-1. `issue` (required): Jira key or URL.
-2. `mode`: `plan` (default) or `run`.
-3. `workspace`: `feature-folder` (default) or `current-folder`.
-4. `clone`: `ask` (default), `auto`, or `off`.
+Default behavior (low friction):
+1. Resolve `issue` (required): Jira key or URL.
+2. Use defaults unless the user explicitly overrides:
+   - `mode=plan`
+   - `workspace=feature-folder`
+   - `clone=ask`
+   - `confirm=off`
+3. Execute directly without extra confirmation prompts.
+
+On-demand confirmation mode:
+- If the user explicitly asks for confirmation/review before execution, set `confirm=ask` and show the short summary first.
 
 Validation rules:
 - Reject invalid values and reprompt with allowed values.
 - Do not proceed without `issue`.
-- Before execution, show a short summary and ask explicit confirmation.
 
 ## Execution
 
 Always execute the same backend command:
 
 ```bash
-scripts/jira_bootstrap.sh --issue "<ISSUE>" --mode "<MODE>" --workspace "<WORKSPACE>" --clone "<CLONE>"
+scripts/jira_bootstrap.sh --issue "<ISSUE>" --mode "<MODE>" --workspace "<WORKSPACE>" --clone "<CLONE>" --confirm "<CONFIRM>"
 ```
 
 If the user provides a local Jira JSON fixture, append:

@@ -86,6 +86,10 @@ O Codex irá solicitar:
 - Seu e-mail Atlassian
 - Seu API Token
 
+Observação de segurança:
+- o token é coletado por prompt silencioso;
+- em modo não interativo, use variável de ambiente `JIRA_API_TOKEN`.
+
 Essas informações são armazenadas automaticamente no arquivo global da skill:
 
 ```
@@ -103,6 +107,10 @@ Dentro de qualquer projeto:
 ```text
 $jira VA-1234
 ```
+
+Comportamento padrão:
+- execução direta com defaults (`plan`, `feature-folder`, `ask`) sem confirmação intermediária.
+- se quiser confirmação antes de executar, peça explicitamente no prompt (modo sob demanda).
 
 Ou mencione a issue naturalmente:
 

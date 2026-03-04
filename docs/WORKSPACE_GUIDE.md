@@ -86,6 +86,13 @@ Chame a skill diretamente:
 $jira VA-1234
 ```
 
+Comportamento padrão:
+- usa defaults (`mode=plan`, `workspace=feature-folder`, `clone=ask`);
+- executa sem confirmação interativa.
+
+Confirmação sob demanda:
+- se o usuário pedir confirmação antes de executar, use `--confirm ask` no `jira_bootstrap.sh`.
+
 Você também pode mencionar issues de forma natural na conversa:
 - `Vamos trabalhar na VA-1234`
 - `Me ajuda com a VA-1234`
@@ -133,8 +140,13 @@ Use esta seção para registrar melhorias contínuas da skill:
 - `jira_bootstrap.sh`: essencial (entrypoint e contrato principal da skill).
 - `jira_get_issue.sh`: essencial (normalização dos dados Jira + suporte offline com `--input-file`).
 - `jira_configure_credentials.sh`: útil, mas opcional (conveniência de onboarding).
-- `codex-jira`: opcional/redundante (wrapper que só encaminha para `jira_bootstrap.sh`).
 
 Conclusão atual:
-- manter 3 scripts como base (`jira_bootstrap.sh`, `jira_get_issue.sh`, `jira_configure_credentials.sh`);
-- considerar remoção do `codex-jira` se não houver uso real no time.
+- manter 3 scripts como base (`jira_bootstrap.sh`, `jira_get_issue.sh`, `jira_configure_credentials.sh`).
+
+### 2026-03-04 - Segurança e UX de execução
+
+- `jira_bootstrap.sh` passou a suportar `--confirm ask|off` (default `off`).
+- `jira_bootstrap.sh` chama `jira_get_issue.sh` via `bash`, reduzindo risco de falha por bit de execução em instalação.
+- `jira_configure_credentials.sh` deixou de aceitar `--token` por argumento de CLI.
+  - token agora deve vir por prompt silencioso (preferido) ou variável de ambiente `JIRA_API_TOKEN` em modo não interativo.

@@ -6,18 +6,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TARGET_ENV="${SKILL_ROOT}/.env.local"
 
-JIRA_BASE_URL_VALUE=""
-JIRA_EMAIL_VALUE=""
-JIRA_API_TOKEN_VALUE=""
+JIRA_BASE_URL_VALUE="${JIRA_BASE_URL:-}"
+JIRA_EMAIL_VALUE="${JIRA_EMAIL:-}"
+JIRA_API_TOKEN_VALUE="${JIRA_API_TOKEN:-}"
 
 usage() {
   cat <<'EOF'
 Usage:
   jira_configure_credentials.sh
-  jira_configure_credentials.sh --base-url <url> --email <email> --token <token>
+  jira_configure_credentials.sh --base-url <url> --email <email>
 
 Writes Jira credentials to:
   <skill-root>/.env.local
+
+Token handling:
+  - Preferred: interactive silent prompt
+  - Non-interactive: set JIRA_API_TOKEN in environment
 EOF
 }
 
@@ -29,10 +33,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --email)
       JIRA_EMAIL_VALUE="${2:-}"
-      shift 2
-      ;;
-    --token)
-      JIRA_API_TOKEN_VALUE="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -56,8 +56,13 @@ if [[ -z "${JIRA_EMAIL_VALUE}" ]]; then
 fi
 
 if [[ -z "${JIRA_API_TOKEN_VALUE}" ]]; then
-  read -r -s -p "Jira API token: " JIRA_API_TOKEN_VALUE
-  echo
+  if [[ -t 0 ]]; then
+    read -r -s -p "Jira API token: " JIRA_API_TOKEN_VALUE
+    echo
+  else
+    echo "JIRA_API_TOKEN is required in non-interactive mode." >&2
+    exit 1
+  fi
 fi
 
 if [[ -z "${JIRA_BASE_URL_VALUE}" || -z "${JIRA_EMAIL_VALUE}" || -z "${JIRA_API_TOKEN_VALUE}" ]]; then

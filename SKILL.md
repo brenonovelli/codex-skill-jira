@@ -12,16 +12,21 @@ For evolving operational learnings, see `docs/WORKSPACE_GUIDE.md`.
 
 ## Conversational Protocol
 
-When the user invokes the skill without all inputs, ask one question at a time in this exact order:
-1. `issue` (required)
-2. `mode` (`plan` default, `run` optional)
-3. `workspace` (`feature-folder` default, `current-folder` optional)
-4. `clone` (`ask` default, `auto` or `off` optional)
+Default behavior (low friction):
+1. Resolve `issue` (required)
+2. Use defaults unless user explicitly overrides:
+   - `mode=plan`
+   - `workspace=feature-folder`
+   - `clone=ask`
+   - `confirm=off`
+3. Execute directly without confirmation prompts.
+
+On-demand confirmation:
+- If the user explicitly asks for confirmation, set `confirm=ask` and show a short summary before execution.
 
 Validation rules:
 - Reject invalid values and reprompt with allowed options.
 - Do not continue until `issue` is present.
-- Before execution, show a short summary and request explicit confirmation.
 
 Execution rule:
 - Always execute through `scripts/jira_bootstrap.sh` with resolved values (single source of truth).
