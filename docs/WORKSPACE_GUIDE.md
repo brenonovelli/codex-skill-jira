@@ -7,9 +7,23 @@ Use-a para transformar uma chave ou URL de issue do Jira em documentos de planej
 
 ## Instalação Global
 
-### Método determinístico (recomendado)
+### Método padrão (recomendado)
 
-Instala direto do GitHub, sem passar pela listagem de skills curadas:
+No Codex interativo:
+
+```text
+Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira
+```
+
+### Via Codex CLI (opcional)
+
+```bash
+codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
+```
+
+### Fallback seguro (mais determinístico)
+
+Se quiser evitar o fluxo agêntico e chamar o backend de instalação diretamente:
 
 ```bash
 python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --url https://github.com/brenonovelli/codex-skill-jira --path . --name jira
@@ -21,22 +35,10 @@ Ou, se estiver no clone deste repositório:
 scripts/install_global_skill.sh
 ```
 
-### Terminal com Codex (opcional)
-
-```bash
-codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Run python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --url https://github.com/brenonovelli/codex-skill-jira --path . --name jira'
-```
-
 Por que essas flags:
 - `--skip-git-repo-check`: permite instalação global fora de um diretório Git confiável.
 - `-s workspace-write`: evita falhas do sandbox `read-only` durante a instalação.
 - `--add-dir "$HOME/.codex"` e `--add-dir /tmp`: libera acesso de escrita no destino e em diretórios temporários.
-
-Se as restrições de escrita persistirem, use:
-
-```bash
-codex exec --skip-git-repo-check -s danger-full-access 'Run python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --url https://github.com/brenonovelli/codex-skill-jira --path . --name jira'
-```
 
 Se o acesso ao `github.com` estiver bloqueado, sincronize a partir de um clone local:
 
@@ -54,12 +56,12 @@ Not inside a trusted directory and --skip-git-repo-check was not specified.
 use:
 
 ```bash
-codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Run python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --url https://github.com/brenonovelli/codex-skill-jira --path . --name jira'
+codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
 ```
 
 Por que isso acontece: o `codex exec` verifica se você está em um diretório confiável (tipicamente um repositório Git). Como a instalação da skill é global, ignorar essa checagem aqui é normal.
 
-Se o Codex pedir para rodar `list-skills.py` (lista curada), recuse e rode o comando de instalação direta:
+Se o Codex pedir para rodar `list-skills.py` (lista curada), recuse e rode o fallback seguro:
 
 ```bash
 python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --url https://github.com/brenonovelli/codex-skill-jira --path . --name jira
