@@ -34,24 +34,25 @@ Você precisará dessas informações logo após a instalação para configurar 
 
 # Instalação Global
 
-## Método recomendado (via Codex)
+## Método determinístico (recomendado)
 
-### No Codex interativo
-
-Abra o Codex e execute:
-
-```text
-Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira
-```
-
-### Pelo terminal (Codex CLI)
+Instala direto do GitHub, sem passar pela listagem de skills curadas:
 
 ```bash
-codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
+python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --url https://github.com/brenonovelli/codex-skill-jira --path . --name jira
 ```
 
-> **Importante:**  
-> Use aspas simples (`'`) para evitar que o shell expanda `$skill-installer`.
+Ou, se estiver no clone deste repositório:
+
+```bash
+scripts/install_global_skill.sh
+```
+
+### Via Codex CLI (opcional)
+
+```bash
+codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Run python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --url https://github.com/brenonovelli/codex-skill-jira --path . --name jira'
+```
 
 ---
 
@@ -172,10 +173,22 @@ Not inside a trusted directory and --skip-git-repo-check was not specified.
 Execute novamente com:
 
 ```bash
-codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
+codex exec --skip-git-repo-check -s workspace-write --add-dir "$HOME/.codex" --add-dir /tmp 'Run python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --url https://github.com/brenonovelli/codex-skill-jira --path . --name jira'
 ```
 
 Esse erro ocorre porque o `codex exec` exige que o comando seja executado dentro de um diretório Git confiável. Como a instalação da skill é global, ignorar essa verificação é esperado nesse cenário.
+
+---
+
+### Prompt de lista curada (`list-skills.py`)
+
+Se o Codex perguntar se pode rodar `list-skills.py` para consultar skills curadas:
+- escolha `No`;
+- execute a instalação direta:
+
+```bash
+python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --url https://github.com/brenonovelli/codex-skill-jira --path . --name jira
+```
 
 ---
 
@@ -184,7 +197,7 @@ Esse erro ocorre porque o `codex exec` exige que o comando seja executado dentro
 Se houver erro de permissão, execute:
 
 ```bash
-codex exec --skip-git-repo-check -s danger-full-access 'Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira'
+codex exec --skip-git-repo-check -s danger-full-access 'Run python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --url https://github.com/brenonovelli/codex-skill-jira --path . --name jira'
 ```
 
 ---
