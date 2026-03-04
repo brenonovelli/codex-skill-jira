@@ -41,4 +41,41 @@ if ! grep -q "# VA-1564 - Jira Summary" "${TMP_DIR}/docs/VA-1564-jira-summary.md
   exit 1
 fi
 
+if ! grep -q "Clone execution: disabled by policy" "${TMP_DIR}/docs/VA-1564-implementation-plan.md"; then
+  echo "Expected disabled clone execution state was not recorded" >&2
+  exit 1
+fi
+
+if ! grep -q "## Consolidated Context" "${TMP_DIR}/docs/VA-1564-implementation-plan.md"; then
+  echo "Expected consolidated context section was not generated" >&2
+  exit 1
+fi
+
+if ! grep -q "## Planning Handoff" "${TMP_DIR}/docs/VA-1564-implementation-plan.md"; then
+  echo "Expected planning handoff section was not generated" >&2
+  exit 1
+fi
+
+if ! grep -q "/plan" "${TMP_DIR}/docs/VA-1564-implementation-plan.md"; then
+  echo "Expected /plan handoff hint was not generated" >&2
+  exit 1
+fi
+
+TMP_DIR_ASK="$(mktemp -d)"
+trap 'rm -rf "${TMP_DIR}" "${TMP_DIR_ASK}"' EXIT
+
+pushd "${TMP_DIR_ASK}" >/dev/null
+"${REPO_ROOT}/scripts/jira_bootstrap.sh" \
+  --issue "VA-1564" \
+  --mode "plan" \
+  --workspace "current-folder" \
+  --clone "ask" \
+  --issue-json "${FIXTURE}"
+popd >/dev/null
+
+if ! grep -q "Clone execution: skipped by confirmation policy" "${TMP_DIR_ASK}/docs/VA-1564-implementation-plan.md"; then
+  echo "Expected plan-mode clone skip state was not recorded" >&2
+  exit 1
+fi
+
 echo "Offline smoke test passed"

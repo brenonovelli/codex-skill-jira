@@ -124,7 +124,9 @@ $jira VA-1234
 ```
 
 Comportamento padrão:
-- execução direta com defaults (`plan`, `feature-folder`, `ask`) sem confirmação intermediária.
+- execução direta com defaults (`plan`, `feature-folder`, `auto`) sem confirmação intermediária.
+- com `clone=auto`, os repositórios detectados na issue são materializados em `repos/` tanto no modo `plan` quanto no `run`.
+- no `mode=plan`, a skill consolida contexto da issue + repositórios e prepara handoff para `/plan`.
 - se quiser confirmação antes de executar, peça explicitamente no prompt (modo sob demanda).
 
 Ou mencione a issue naturalmente:
@@ -142,6 +144,10 @@ Para cada issue processada, são criados:
 - `docs/<ISSUE>-implementation-plan.md`
 - `docs/<ISSUE>-checklist.md`
 - `docs/<ISSUE>-jira-summary.md`
+
+Quando houver links de repositório e clone habilitado:
+
+- `repos/<repo-name>`
 
 ---
 

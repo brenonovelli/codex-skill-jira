@@ -126,6 +126,8 @@ NORMALIZED_JSON="$(printf '%s' "${RAW_JSON}" | jq -c '
     elif type == "object" then ((.text // "") + ((.content // []) | flat))
     else ""
     end;
+  def attr_urls:
+    [.. | objects | .attrs.url? // empty];
   def clean:
     gsub("\r"; "")
     | gsub("[ \t]+\n"; "\n")
@@ -153,7 +155,11 @@ NORMALIZED_JSON="$(printf '%s' "${RAW_JSON}" | jq -c '
         +
         ((.fields.description | flat | find_urls))
         +
+        ((.fields.description | attr_urls))
+        +
         [(.fields.comment.comments[]?.body | flat | find_urls[]) ]
+        +
+        [(.fields.comment.comments[]?.body | attr_urls[]) ]
       )
       | map(select(length > 0))
       | unique

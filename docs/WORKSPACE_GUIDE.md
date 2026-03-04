@@ -107,7 +107,9 @@ $jira VA-1234
 ```
 
 Comportamento padrão:
-- usa defaults (`mode=plan`, `workspace=feature-folder`, `clone=ask`);
+- usa defaults (`mode=plan`, `workspace=feature-folder`, `clone=auto`);
+- com `clone=auto`, clona os repositórios detectados em `repos/` no modo `plan` e no `run`;
+- no `mode=plan`, consolida contexto de issue + repos e deixa o handoff pronto para `/plan`;
 - executa sem confirmação interativa.
 
 Confirmação sob demanda:
@@ -125,6 +127,9 @@ Para cada issue:
 - `docs/<ISSUE>-implementation-plan.md`
 - `docs/<ISSUE>-checklist.md`
 - `docs/<ISSUE>-jira-summary.md`
+
+Quando houver links de repositório e clone habilitado:
+- `repos/<repo-name>`
 
 ## Modo Offline (Fixture)
 
@@ -170,6 +175,17 @@ Conclusão atual:
 - `jira_bootstrap.sh` chama `jira_get_issue.sh` via `bash`, reduzindo risco de falha por bit de execução em instalação.
 - `jira_configure_credentials.sh` deixou de aceitar `--token` por argumento de CLI.
   - token agora deve vir por prompt silencioso (preferido) ou variável de ambiente `JIRA_API_TOKEN` em modo não interativo.
+
+### 2026-03-04 - Workspace completo por padrão
+
+- `jira_bootstrap.sh` passou a usar `clone=auto` por default.
+- a etapa de clone não depende mais de `mode=run` (também executa em `plan`).
+- os artefatos de plano e resumo agora incluem uma seção `Repository Workspace` com resultado da materialização de repositórios.
+
+### 2026-03-04 - Handoff determinístico para `/plan`
+
+- ordem do fluxo em `mode=plan`: clonar (quando houver repos) -> consolidar contexto -> handoff para `/plan`.
+- os artefatos incluem contexto consolidado para reduzir retrabalho e aumentar precisão do planejamento.
 
 ### 2026-03-04 - Fricção observada na instalação conversacional
 
