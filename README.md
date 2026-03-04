@@ -42,6 +42,12 @@ No Codex interativo:
 Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira
 ```
 
+Prompt conversacional recomendado (mais direto):
+
+```text
+Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira using path "." directly, without listing curated skills first.
+```
+
 ### Via Codex CLI (opcional)
 
 ```bash

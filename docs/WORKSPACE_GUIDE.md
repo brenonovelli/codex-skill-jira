@@ -15,6 +15,12 @@ No Codex interativo:
 Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira
 ```
 
+Prompt conversacional recomendado (mais direto):
+
+```text
+Use $skill-installer to install https://github.com/brenonovelli/codex-skill-jira as jira using path "." directly, without listing curated skills first.
+```
+
 ### Via Codex CLI (opcional)
 
 ```bash
@@ -164,3 +170,13 @@ Conclusão atual:
 - `jira_bootstrap.sh` chama `jira_get_issue.sh` via `bash`, reduzindo risco de falha por bit de execução em instalação.
 - `jira_configure_credentials.sh` deixou de aceitar `--token` por argumento de CLI.
   - token agora deve vir por prompt silencioso (preferido) ou variável de ambiente `JIRA_API_TOKEN` em modo não interativo.
+
+### 2026-03-04 - Fricção observada na instalação conversacional
+
+Fluxo observado em teste real:
+- tentativa inicial sem `--path` falha para URL de repo raiz;
+- tentativa com `--path jira` falha (a skill está na raiz, não em subpasta `jira`);
+- sucesso com `--path . --name jira`.
+
+Ação adotada:
+- adicionar prompt conversacional recomendado para reduzir tentativas exploratórias.
