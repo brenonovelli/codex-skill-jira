@@ -1,0 +1,86 @@
+{
+  "key": "VA-1564",
+  "self": "https://example.atlassian.net/rest/api/3/issue/1784200",
+  "fields": {
+    "summary": "Offline fixture smoke test",
+    "status": {
+      "name": "To Do"
+    },
+    "assignee": {
+      "displayName": "Example Assignee"
+    },
+    "reporter": {
+      "displayName": "Example Reporter"
+    },
+    "description": {
+      "type": "doc",
+      "version": 1,
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "This is a sanitized Jira fixture used for offline skill validation."
+            }
+          ]
+        },
+        {
+          "type": "bulletList",
+          "content": [
+            {
+              "type": "listItem",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Repository reference: https://github.com/example/public-repo"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "listItem",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Acceptance criteria must be confirmed during implementation planning."
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "comment": {
+      "comments": [
+        {
+          "body": {
+            "type": "doc",
+            "version": 1,
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Offline fixture comment for deterministic testing."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "issuelinks": []
+  }
+}

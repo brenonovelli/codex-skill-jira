@@ -98,3 +98,43 @@ Para cada issue:
 - `docs/<ISSUE>-implementation-plan.md`
 - `docs/<ISSUE>-checklist.md`
 - `docs/<ISSUE>-jira-summary.md`
+
+## Modo Offline (Fixture)
+
+Objetivo:
+- validar o pipeline sem depender de Jira real;
+- reproduzir bugs com entrada fixa;
+- habilitar teste em CI sem credenciais.
+
+Como funciona:
+- `jira_bootstrap.sh --issue-json <arquivo>` desvia a chamada de rede;
+- `jira_get_issue.sh --input-file <arquivo>` normaliza o JSON local;
+- o restante da geração de artefatos é idêntico ao modo online.
+
+Fixture de referência:
+- `fixtures/jira/VA-1564.raw.json`
+
+Smoke test:
+- `tests/offline_smoke.sh`
+
+CI:
+- `.github/workflows/offline-smoke.yml`
+
+## Aprendizados Acumulados
+
+Use esta seção para registrar melhorias contínuas da skill:
+- ajustes de prompts/instruções;
+- problemas reais encontrados em produção;
+- padrões de troubleshooting;
+- decisões de simplificação/remoção de escopo e seus impactos.
+
+### 2026-03-04 - Checagem de necessidade dos scripts
+
+- `jira_bootstrap.sh`: essencial (entrypoint e contrato principal da skill).
+- `jira_get_issue.sh`: essencial (normalização dos dados Jira + suporte offline com `--input-file`).
+- `jira_configure_credentials.sh`: útil, mas opcional (conveniência de onboarding).
+- `codex-jira`: opcional/redundante (wrapper que só encaminha para `jira_bootstrap.sh`).
+
+Conclusão atual:
+- manter 3 scripts como base (`jira_bootstrap.sh`, `jira_get_issue.sh`, `jira_configure_credentials.sh`);
+- considerar remoção do `codex-jira` se não houver uso real no time.

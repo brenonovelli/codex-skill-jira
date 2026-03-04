@@ -1,0 +1,27 @@
+name: Offline Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  offline-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Verify tooling
+        run: |
+          bash --version
+          jq --version
+
+      - name: Run offline smoke test
+        run: tests/offline_smoke.sh

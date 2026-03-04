@@ -8,7 +8,7 @@ description: Generate technical planning artifacts from a Jira issue key or URL.
 Use `scripts/jira_bootstrap.sh` as the main entrypoint.
 For workspace-first usage, see `AGENTS.md` in this repository root.
 For user-facing onboarding, see `README.md`.
-For full skill usage details, see `docs/WORKSPACE_GUIDE.md`.
+For evolving operational learnings, see `docs/WORKSPACE_GUIDE.md`.
 
 ## Conversational Protocol
 
