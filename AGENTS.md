@@ -34,6 +34,13 @@ Validation rules:
 - Reject invalid values and reprompt with allowed values.
 - Do not proceed without `issue`.
 
+## Credential Fast Path
+
+If the user asks to configure Jira credentials and already provides all values (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`) in the same request:
+- Run `scripts/jira_configure_credentials.sh` immediately (non-interactive), without exploratory checks.
+- Do not run extra discovery commands before configuration unless setup fails.
+- After writing credentials, confirm the target file path and continue the original task.
+
 ## Execution
 
 Always execute the same backend command:
@@ -69,6 +76,15 @@ When repository links are detected and clone is enabled, also materialize reposi
 
 - If Jira credentials are missing and no `--issue-json` is provided, stop and ask user to configure credentials (`.env`, `.env.local`, or `--env-file`).
 - If user asks for non-interactive execution, run directly with explicit flags and skip questions.
+
+## Implementation Rule
+
+When the user asks to implement/apply the generated plan:
+- Always create a new git branch before making code changes.
+- Default branch name pattern: `feature/<ISSUE_KEY>-<ISSUE_TITLE_SLUG>`.
+- Build `<ISSUE_TITLE_SLUG>` from Jira summary/title in lowercase kebab-case (ASCII), removing special characters.
+- If a branch with the same name already exists locally, append a unique suffix (for example `-v2` or timestamp).
+- If the user provides an explicit branch name, use it instead.
 
 ## Tone
 

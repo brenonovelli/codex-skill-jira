@@ -39,12 +39,20 @@ Execution rule:
 - Do not pause waiting for an extra user message between bootstrap and planning unless blocked.
 
 Credential setup rule:
+- Fast-path: if user already provided `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN` in the same request, run `scripts/jira_configure_credentials.sh` immediately without exploratory checks.
 - If execution fails due to missing Jira credentials, ask user for:
   - `JIRA_BASE_URL`
   - `JIRA_EMAIL`
   - `JIRA_API_TOKEN`
 - Then run `scripts/jira_configure_credentials.sh` to save them globally in `<skill-root>/.env.local`.
 - Re-run the original Jira request after credentials are configured.
+
+Implementation rule:
+- When user asks to implement/apply the plan, create a new git branch before any code edits.
+- Default branch naming: `feature/<ISSUE_KEY>-<ISSUE_TITLE_SLUG>`.
+- Build slug from Jira summary/title in lowercase kebab-case (ASCII).
+- If branch name already exists, append a unique suffix.
+- Respect explicit branch names provided by user.
 
 ## Generated Files
 
