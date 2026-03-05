@@ -23,7 +23,7 @@ Default behavior (low friction):
 4. If `mode=plan`, finish with planning handoff:
    - clone first (when links exist and clone is enabled);
    - consolidate issue + repository context from generated docs;
-   - run `/plan` using that consolidated context.
+   - run `/plan` using that consolidated context in the same user request.
 
 On-demand confirmation:
 - If the user explicitly asks for confirmation, set `confirm=ask` and show a short summary before execution.
@@ -36,6 +36,7 @@ Execution rule:
 - Always execute through `scripts/jira_bootstrap.sh` with resolved values (single source of truth).
 - For `mode=plan`, use `docs/<ISSUE>-implementation-plan.md` and `docs/<ISSUE>-jira-summary.md` as `/plan` input.
 - If `repos/` exists, include repository analysis in the planning step.
+- Do not pause waiting for an extra user message between bootstrap and planning unless blocked.
 
 Credential setup rule:
 - If execution fails due to missing Jira credentials, ask user for:

@@ -18,6 +18,16 @@ LOCAL_REPO_CONTEXT_LINES=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 JIRA_GET_SCRIPT="${SCRIPT_DIR}/jira_get_issue.sh"
+STEP_COUNTER=0
+
+log_info() {
+  echo "[jira_bootstrap] $*"
+}
+
+log_step() {
+  ((STEP_COUNTER+=1))
+  log_info "Step ${STEP_COUNTER}: $*"
+}
 
 usage() {
   cat <<'EOF'
@@ -28,6 +38,7 @@ Behavior:
   - Defaults: --mode plan --workspace feature-folder --clone auto --confirm off
   - No interactive prompts are shown by default.
   - Use --confirm ask to request interactive confirmation before execution.
+  - The script prints step-by-step logs to simplify troubleshooting.
 
 Credentials:
   If --issue-json is not provided, Jira credentials are required.
@@ -158,6 +169,8 @@ done
 
 load_env_defaults
 
+log_step "Validating input arguments and execution policies."
+
 if [[ -z "${ISSUE}" ]]; then
   echo "Missing --issue."
   usage
@@ -192,6 +205,9 @@ else
   ISSUE_KEY_INPUT="${ISSUE}"
 fi
 
+log_info "Resolved issue input: ${ISSUE} (key candidate: ${ISSUE_KEY_INPUT})"
+log_info "Execution profile: mode=${MODE}, workspace=${WORKSPACE_STRATEGY}, clone=${CLONE_POLICY}, confirm=${CONFIRM_POLICY}"
+
 if [[ "${WORKSPACE_STRATEGY}" == "feature-folder" ]]; then
   TARGET_DIR="./${ISSUE_KEY_INPUT}"
   mkdir -p "${TARGET_DIR}/docs"
@@ -200,10 +216,14 @@ else
   mkdir -p "${TARGET_DIR}/docs"
 fi
 
+log_info "Workspace target directory: ${TARGET_DIR#./}"
+
 ISSUE_JSON=""
 if [[ -n "${ISSUE_JSON_FILE}" ]]; then
+  log_step "Loading Jira issue from local JSON fixture."
   ISSUE_JSON="$(bash "${JIRA_GET_SCRIPT}" --issue "${ISSUE}" --input-file "${ISSUE_JSON_FILE}")"
 else
+  log_step "Fetching Jira issue from remote API."
   if [[ -z "${JIRA_BASE_URL:-}" || -z "${JIRA_EMAIL:-}" || -z "${JIRA_API_TOKEN:-}" ]]; then
     echo "Missing Jira credentials. Configure ${SKILL_ROOT}/.env.local (or .env), or pass --env-file." >&2
     echo "Alternative for offline mode: pass --issue-json <file>." >&2
@@ -225,6 +245,8 @@ DESCRIPTION="$(printf '%s' "${ISSUE_JSON}" | jq -r '.description')"
 ISSUE_URL="$(printf '%s' "${ISSUE_JSON}" | jq -r '.issue_url')"
 REPO_LINK_COUNT="$(printf '%s' "${ISSUE_JSON}" | jq -r '.repo_urls | length')"
 COMMENTS_COUNT="$(printf '%s' "${ISSUE_JSON}" | jq -r '.comments | length')"
+
+log_info "Issue normalized: key=${ISSUE_KEY}, status=${STATUS}, comments=${COMMENTS_COUNT}, repo_links=${REPO_LINK_COUNT}"
 
 SPEC_FILE="${TARGET_DIR}/docs/${ISSUE_KEY}-spec.md"
 PLAN_FILE="${TARGET_DIR}/docs/${ISSUE_KEY}-implementation-plan.md"
@@ -339,6 +361,7 @@ ${DESCRIPTION:-No Jira description available.}
 - [ ] Confirm rollout strategy and observability requirements.
 EOF
 
+log_step "Generating base documentation artifacts."
 cat > "${PLAN_FILE}" <<EOF
 # ${ISSUE_KEY} - Implementation Plan
 
@@ -429,12 +452,14 @@ clone_repositories_if_needed() {
   if [[ "${CLONE_POLICY}" == "off" ]]; then
     CLONE_STATUS="disabled"
     append_clone_report_line "Repository clone step disabled by --clone off."
+    log_info "Clone stage skipped by policy (clone=off)."
     return
   fi
 
   if [[ "${REPO_LINK_COUNT}" == "0" ]]; then
     CLONE_STATUS="no-repositories"
     append_clone_report_line "No repository links were detected in the Jira issue."
+    log_info "Clone stage skipped because no repository links were detected."
     return
   fi
 
@@ -453,10 +478,11 @@ clone_repositories_if_needed() {
   if [[ "${should_clone}" != "yes" ]]; then
     CLONE_STATUS="skipped"
     append_clone_report_line "Repository clone step skipped (policy ask without positive confirmation)."
-    echo "Skipping clone step."
+    log_info "Clone stage skipped (clone=ask without positive confirmation)."
     return
   fi
 
+  log_step "Cloning detected repositories."
   CLONE_STATUS="completed"
   mkdir -p "${TARGET_DIR}/repos"
   while IFS= read -r url; do
@@ -469,11 +495,11 @@ clone_repositories_if_needed() {
       append_clone_report_line "Already present: \`${dest_display}\` (source: ${url})."
       continue
     fi
-    echo "Cloning ${url} -> ${dest}"
+    log_info "Cloning ${url} -> ${dest_display}"
     if clone_repo_url "${url}" "${dest}"; then
       append_clone_report_line "Cloned: \`${dest_display}\` (source: ${url})."
     else
-      echo "Failed to clone ${url}"
+      log_info "Failed to clone ${url}"
       append_clone_report_line "Failed: ${url}."
     fi
   done < <(printf '%s' "${ISSUE_JSON}" | jq -r '.repo_urls[]')
@@ -511,6 +537,7 @@ collect_local_repositories_context() {
 }
 
 clone_repositories_if_needed
+log_step "Consolidating repository context for planning."
 collect_local_repositories_context
 
 REPOSITORY_WORKSPACE_SECTION="$(build_repository_workspace_section)"
@@ -542,5 +569,6 @@ echo "- ${CHECKLIST_FILE}"
 echo "- ${SUMMARY_FILE}"
 
 if [[ "${MODE}" == "plan" ]]; then
+  log_step "Planning handoff ready."
   echo "Next conversational step: run /plan using $(display_path "${PLAN_FILE}") and $(display_path "${SUMMARY_FILE}")."
 fi

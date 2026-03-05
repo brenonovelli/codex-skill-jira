@@ -110,6 +110,7 @@ Comportamento padrão:
 - usa defaults (`mode=plan`, `workspace=feature-folder`, `clone=auto`);
 - com `clone=auto`, clona os repositórios detectados em `repos/` no modo `plan` e no `run`;
 - no `mode=plan`, consolida contexto de issue + repos e deixa o handoff pronto para `/plan`;
+- no fluxo conversacional, bootstrap + planejamento devem acontecer no mesmo pedido do usuário;
 - executa sem confirmação interativa.
 
 Confirmação sob demanda:

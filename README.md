@@ -127,6 +127,7 @@ Comportamento padrão:
 - execução direta com defaults (`plan`, `feature-folder`, `auto`) sem confirmação intermediária.
 - com `clone=auto`, os repositórios detectados na issue são materializados em `repos/` tanto no modo `plan` quanto no `run`.
 - no `mode=plan`, a skill consolida contexto da issue + repositórios e prepara handoff para `/plan`.
+- no fluxo conversacional, bootstrap e planejamento rodam no mesmo pedido do usuário (sem segundo comando manual).
 - se quiser confirmação antes de executar, peça explicitamente no prompt (modo sob demanda).
 
 Ou mencione a issue naturalmente:
