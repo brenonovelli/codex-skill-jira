@@ -9,16 +9,31 @@ CLONE_POLICY="auto"
 CONFIRM_POLICY="off"
 ISSUE_JSON_FILE=""
 ENV_FILE=""
-REPO_LINK_COUNT="0"
-COMMENTS_COUNT="0"
-CLONE_STATUS="not-run"
-CLONE_REPORT_LINES=""
-LOCAL_REPO_COUNT="0"
-LOCAL_REPO_CONTEXT_LINES=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 JIRA_GET_SCRIPT="${SCRIPT_DIR}/jira_get_issue.sh"
 STEP_COUNTER=0
+
+ISSUE_KEY=""
+SUMMARY=""
+STATUS=""
+ASSIGNEE=""
+REPORTER=""
+DESCRIPTION=""
+ISSUE_URL=""
+COMMENTS_COUNT="0"
+REPO_LINK_COUNT="0"
+TARGET_DIR=""
+PLAN_FILE=""
+
+CLONE_STATUS="not-run"
+CLONE_REPORT_LINES=""
+LOCAL_REPO_COUNT="0"
+LOCAL_REPO_CONTEXT_LINES=""
+CODE_ANALYSIS_LINES=""
+VALIDATION_COMMANDS_LINES=""
+IMPLEMENTATION_STEPS_LINES=""
+RISK_LINES=""
 
 log_info() {
   echo "[jira_bootstrap] $*"
@@ -30,15 +45,15 @@ log_step() {
 }
 
 usage() {
-  cat <<'EOF'
+  cat <<'EOF_USAGE'
 Usage:
   jira_bootstrap.sh --issue <KEY|URL> [--mode plan|run] [--workspace feature-folder|current-folder] [--clone ask|auto|off] [--confirm ask|off] [--issue-json <jira-issue.json>] [--env-file <path>]
 
 Behavior:
   - Defaults: --mode plan --workspace feature-folder --clone auto --confirm off
+  - Primary output: docs/<ISSUE>-implementation-plan.md
   - No interactive prompts are shown by default.
   - Use --confirm ask to request interactive confirmation before execution.
-  - The script prints step-by-step logs to simplify troubleshooting.
 
 Credentials:
   If --issue-json is not provided, Jira credentials are required.
@@ -49,10 +64,10 @@ Credentials:
 
 Examples:
   jira_bootstrap.sh --issue VA-1462
-  jira_bootstrap.sh --issue https://company.atlassian.net/browse/VA-1462 --mode run --clone auto
+  jira_bootstrap.sh --issue https://company.atlassian.net/browse/VA-1462 --mode plan --clone auto
   jira_bootstrap.sh --issue VA-1462 --confirm ask
   jira_bootstrap.sh --issue VA-1462 --issue-json /tmp/VA-1462.raw.json
-EOF
+EOF_USAGE
 }
 
 load_env_file() {
@@ -125,6 +140,328 @@ confirm_if_requested() {
   esac
 }
 
+append_line() {
+  local var_name="$1"
+  local value="$2"
+  printf -v "${var_name}" '%s%s\n' "${!var_name}" "${value}"
+}
+
+display_path() {
+  local path="$1"
+  printf '%s' "${path#./}"
+}
+
+extract_keywords() {
+  local raw_text="$1"
+  printf '%s\n' "${raw_text}" \
+    | tr '[:upper:]' '[:lower:]' \
+    | tr -cs 'a-z0-9' '\n' \
+    | awk 'length($0) >= 4' \
+    | awk '!seen[$0]++' \
+    | head -n 8
+}
+
+build_search_regex_from_issue() {
+  local raw_text="$1"
+  local keyword=""
+  local regex=""
+
+  while IFS= read -r keyword; do
+    [[ -n "${keyword}" ]] || continue
+    if [[ -z "${regex}" ]]; then
+      regex="${keyword}"
+    else
+      regex="${regex}|${keyword}"
+    fi
+  done < <(extract_keywords "${raw_text}")
+
+  printf '%s' "${regex}"
+}
+
+summarize_issue_context() {
+  local desc_clean=""
+
+  desc_clean="${DESCRIPTION:-No Jira description available.}"
+  desc_clean="$(printf '%s' "${desc_clean}" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-1200)"
+
+  {
+    echo "## Issue Essentials"
+    echo "- Issue key: ${ISSUE_KEY}"
+    echo "- Jira URL: ${ISSUE_URL}"
+    echo "- Summary: ${SUMMARY}"
+    echo "- Status: ${STATUS}"
+    echo "- Assignee: ${ASSIGNEE}"
+    echo "- Reporter: ${REPORTER}"
+    echo "- Comments captured: ${COMMENTS_COUNT}"
+    echo
+    echo "## Important Context"
+    echo "${desc_clean}"
+  }
+}
+
+clone_repo_url() {
+  local url="$1"
+  local destination="$2"
+
+  if [[ "${url}" =~ github\.com/([^/]+/[^/.]+)(\.git)?$ ]] && command -v gh >/dev/null 2>&1; then
+    local repo="${BASH_REMATCH[1]}"
+    gh repo clone "${repo}" "${destination}"
+    return
+  fi
+
+  git clone "${url}" "${destination}"
+}
+
+clone_repositories_if_needed() {
+  local should_clone="yes"
+  local answer=""
+  local repo_name=""
+  local dest=""
+  local dest_display=""
+
+  if [[ "${CLONE_POLICY}" == "off" ]]; then
+    CLONE_STATUS="disabled"
+    append_line CLONE_REPORT_LINES "- Clone disabled by policy (--clone off)."
+    log_info "Clone stage skipped by policy (clone=off)."
+    return
+  fi
+
+  if [[ "${REPO_LINK_COUNT}" == "0" ]]; then
+    CLONE_STATUS="no-repositories"
+    append_line CLONE_REPORT_LINES "- No repository links detected in issue."
+    log_info "Clone stage skipped because no repository links were detected."
+    return
+  fi
+
+  if [[ "${CLONE_POLICY}" == "ask" ]]; then
+    should_clone="no"
+    if [[ -t 0 ]]; then
+      if ! read -r -p "Clone detected repositories now? [y/N] " answer; then
+        answer=""
+      fi
+      case "${answer}" in
+        y|Y|yes|YES) should_clone="yes" ;;
+      esac
+    fi
+  fi
+
+  if [[ "${should_clone}" != "yes" ]]; then
+    CLONE_STATUS="skipped"
+    append_line CLONE_REPORT_LINES "- Clone skipped (policy ask without positive confirmation)."
+    log_info "Clone stage skipped (clone=ask without positive confirmation)."
+    return
+  fi
+
+  CLONE_STATUS="completed"
+  log_step "Cloning detected repositories."
+  mkdir -p "${TARGET_DIR}/repos"
+
+  while IFS= read -r url; do
+    repo_name="$(basename "${url}" .git)"
+    repo_name="${repo_name%%\?*}"
+    dest="${TARGET_DIR}/repos/${repo_name}"
+    dest_display="$(display_path "${dest}")"
+
+    if [[ -d "${dest}" ]]; then
+      append_line CLONE_REPORT_LINES "- Already present: ${dest_display} (source: ${url})."
+      log_info "Repository already exists, skipping clone: ${dest_display}"
+      continue
+    fi
+
+    log_info "Cloning ${url} -> ${dest_display}"
+    if clone_repo_url "${url}" "${dest}"; then
+      append_line CLONE_REPORT_LINES "- Cloned: ${dest_display} (source: ${url})."
+    else
+      append_line CLONE_REPORT_LINES "- Failed: ${url}."
+      log_info "Failed to clone ${url}"
+    fi
+  done < <(printf '%s' "${ISSUE_JSON}" | jq -r '.repo_urls[]')
+}
+
+analyze_single_repository() {
+  local repo_dir="$1"
+  local issue_search_regex="$2"
+  local repo_name=""
+  local rel_path=""
+  local branch=""
+  local head=""
+  local origin=""
+  local file_count="0"
+  local manifests=""
+  local top_areas=""
+  local matches=""
+  local test_cmd=""
+
+  repo_name="$(basename "${repo_dir}")"
+  rel_path="$(display_path "${repo_dir}")"
+
+  ((LOCAL_REPO_COUNT+=1))
+
+  branch="$(git -C "${repo_dir}" symbolic-ref --short HEAD 2>/dev/null || true)"
+  head="$(git -C "${repo_dir}" rev-parse --short HEAD 2>/dev/null || true)"
+  origin="$(git -C "${repo_dir}" config --get remote.origin.url 2>/dev/null || true)"
+  [[ -n "${branch}" ]] || branch="detached-or-unknown"
+  [[ -n "${head}" ]] || head="unknown"
+  [[ -n "${origin}" ]] || origin="unknown"
+
+  append_line LOCAL_REPO_CONTEXT_LINES "- ${rel_path} (branch: ${branch}, head: ${head}, origin: ${origin})."
+
+  file_count="$(find "${repo_dir}" -type f \
+    -not -path '*/.git/*' \
+    -not -path '*/node_modules/*' \
+    -not -path '*/dist/*' \
+    -not -path '*/build/*' \
+    | wc -l | tr -d ' ')"
+
+  manifests="$(find "${repo_dir}" -maxdepth 2 -type f \
+    \( -name 'package.json' -o -name 'go.mod' -o -name 'pyproject.toml' -o -name 'requirements*.txt' -o -name 'pom.xml' -o -name 'build.gradle*' -o -name 'Cargo.toml' -o -name 'Gemfile' \) \
+    | sed "s#^${repo_dir}/##" \
+    | sort \
+    | paste -sd ', ' -)"
+  [[ -n "${manifests}" ]] || manifests="none detected (maxdepth 2)"
+
+  top_areas="$(find "${repo_dir}" -mindepth 1 -maxdepth 1 -type d \
+    -not -name '.git' \
+    -not -name 'node_modules' \
+    | sed "s#^${repo_dir}/##" \
+    | sort \
+    | head -n 8 \
+    | paste -sd ', ' -)"
+  [[ -n "${top_areas}" ]] || top_areas="root-only"
+
+  test_cmd=""
+  if [[ -f "${repo_dir}/package.json" ]]; then
+    local npm_test
+    npm_test="$(jq -r '.scripts.test // empty' "${repo_dir}/package.json" 2>/dev/null || true)"
+    if [[ -n "${npm_test}" ]]; then
+      test_cmd="npm test"
+    else
+      test_cmd="npm run test --if-present"
+    fi
+  elif [[ -f "${repo_dir}/go.mod" ]]; then
+    test_cmd="go test ./..."
+  elif [[ -f "${repo_dir}/pyproject.toml" || -n "$(find "${repo_dir}" -maxdepth 1 -type f -name 'requirements*.txt' -print -quit)" ]]; then
+    test_cmd="pytest"
+  elif [[ -f "${repo_dir}/pom.xml" ]]; then
+    test_cmd="mvn test"
+  elif [[ -n "$(find "${repo_dir}" -maxdepth 1 -type f -name 'build.gradle*' -print -quit)" ]]; then
+    test_cmd="./gradlew test"
+  else
+    test_cmd="define project-specific command"
+  fi
+
+  matches=""
+  if [[ -n "${issue_search_regex}" ]]; then
+    matches="$(rg -i --files-with-matches -g '!**/.git/**' -g '!**/node_modules/**' -g '!**/dist/**' -g '!**/build/**' "${issue_search_regex}" "${repo_dir}" 2>/dev/null \
+      | sed "s#^${repo_dir}/##" \
+      | head -n 10 \
+      | paste -sd ', ' -)"
+  fi
+  [[ -n "${matches}" ]] || matches="no direct keyword match found"
+
+  append_line CODE_ANALYSIS_LINES "### ${repo_name}"
+  append_line CODE_ANALYSIS_LINES "- Path: ${rel_path}"
+  append_line CODE_ANALYSIS_LINES "- Files (approx): ${file_count}"
+  append_line CODE_ANALYSIS_LINES "- Key manifests: ${manifests}"
+  append_line CODE_ANALYSIS_LINES "- Top areas: ${top_areas}"
+  append_line CODE_ANALYSIS_LINES "- Candidate touched files/modules: ${matches}"
+  append_line CODE_ANALYSIS_LINES ""
+
+  append_line IMPLEMENTATION_STEPS_LINES "- [ ] ${repo_name}: implementar mudanças nas áreas candidatas e ajustar contratos/integrações necessárias."
+  append_line IMPLEMENTATION_STEPS_LINES "- [ ] ${repo_name}: adicionar/atualizar testes para cobrir o comportamento esperado da ${ISSUE_KEY}."
+
+  append_line VALIDATION_COMMANDS_LINES "- ${repo_name}: ${test_cmd}"
+}
+
+analyze_cloned_repositories() {
+  local search_regex=""
+  local raw_issue_text=""
+  local repo_dir=""
+
+  LOCAL_REPO_COUNT="0"
+  LOCAL_REPO_CONTEXT_LINES=""
+  CODE_ANALYSIS_LINES=""
+  VALIDATION_COMMANDS_LINES=""
+  IMPLEMENTATION_STEPS_LINES=""
+  RISK_LINES=""
+
+  if [[ ! -d "${TARGET_DIR}/repos" ]]; then
+    return
+  fi
+
+  raw_issue_text="${SUMMARY}
+${DESCRIPTION}
+$(printf '%s' "${ISSUE_JSON}" | jq -r '.comments[]?' 2>/dev/null || true)"
+  search_regex="$(build_search_regex_from_issue "${raw_issue_text}")"
+
+  while IFS= read -r repo_dir; do
+    analyze_single_repository "${repo_dir}" "${search_regex}"
+  done < <(find "${TARGET_DIR}/repos" -mindepth 1 -maxdepth 1 -type d | sort)
+
+  if [[ "${LOCAL_REPO_COUNT}" == "0" ]]; then
+    append_line CODE_ANALYSIS_LINES "- No local repositories available for code analysis."
+    append_line IMPLEMENTATION_STEPS_LINES "- [ ] Implementar mudanças apenas com base no contexto do Jira (nenhum repositório disponível localmente)."
+    append_line VALIDATION_COMMANDS_LINES "- Define validation commands after identifying target repository."
+    append_line RISK_LINES "- Risco: sem análise de código local, o plano depende apenas do contexto textual da issue."
+  else
+    append_line RISK_LINES "- Validar dependências cruzadas entre os repositórios antes de merge."
+    append_line RISK_LINES "- Confirmar estratégia de rollout para evitar regressões entre serviços relacionados."
+  fi
+}
+
+build_repository_section() {
+  local clone_execution="not-run"
+
+  case "${CLONE_STATUS}" in
+    disabled) clone_execution="disabled by policy" ;;
+    no-repositories) clone_execution="no repository links found" ;;
+    skipped) clone_execution="skipped by confirmation policy" ;;
+    completed) clone_execution="executed" ;;
+  esac
+
+  {
+    echo "## Repository Materialization"
+    echo "- Repository links detected: ${REPO_LINK_COUNT}"
+    echo "- Clone policy: ${CLONE_POLICY}"
+    echo "- Clone execution: ${clone_execution}"
+    if [[ -n "${CLONE_REPORT_LINES}" ]]; then
+      printf '%s' "${CLONE_REPORT_LINES}"
+    fi
+    if [[ -n "${LOCAL_REPO_CONTEXT_LINES}" ]]; then
+      echo
+      echo "### Local Repository Snapshot"
+      printf '%s' "${LOCAL_REPO_CONTEXT_LINES}"
+    fi
+  }
+}
+
+build_ready_plan_section() {
+  {
+    echo "## Ready-to-Implement Plan"
+    echo ""
+    echo "### Implementation Steps"
+    if [[ -n "${IMPLEMENTATION_STEPS_LINES}" ]]; then
+      printf '%s' "${IMPLEMENTATION_STEPS_LINES}"
+    else
+      echo "- [ ] Define implementation steps after repository analysis."
+    fi
+    echo
+    echo "### Validation Commands"
+    if [[ -n "${VALIDATION_COMMANDS_LINES}" ]]; then
+      printf '%s' "${VALIDATION_COMMANDS_LINES}"
+    else
+      echo "- Define validation commands per repository."
+    fi
+    echo
+    echo "### Risks and Dependencies"
+    if [[ -n "${RISK_LINES}" ]]; then
+      printf '%s' "${RISK_LINES}"
+    else
+      echo "- Confirm dependencies and rollout path with stakeholders."
+    fi
+  }
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --issue)
@@ -168,7 +505,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 load_env_defaults
-
 log_step "Validating input arguments and execution policies."
 
 if [[ -z "${ISSUE}" ]]; then
@@ -248,327 +584,36 @@ COMMENTS_COUNT="$(printf '%s' "${ISSUE_JSON}" | jq -r '.comments | length')"
 
 log_info "Issue normalized: key=${ISSUE_KEY}, status=${STATUS}, comments=${COMMENTS_COUNT}, repo_links=${REPO_LINK_COUNT}"
 
-SPEC_FILE="${TARGET_DIR}/docs/${ISSUE_KEY}-spec.md"
 PLAN_FILE="${TARGET_DIR}/docs/${ISSUE_KEY}-implementation-plan.md"
-CHECKLIST_FILE="${TARGET_DIR}/docs/${ISSUE_KEY}-checklist.md"
-SUMMARY_FILE="${TARGET_DIR}/docs/${ISSUE_KEY}-jira-summary.md"
 
-append_clone_report_line() {
-  CLONE_REPORT_LINES+="- $1"$'\n'
-}
-
-append_local_repo_context_line() {
-  LOCAL_REPO_CONTEXT_LINES+="- $1"$'\n'
-}
-
-display_path() {
-  local path="$1"
-  printf '%s' "${path#./}"
-}
-
-build_repository_workspace_section() {
-  local clone_execution="not-run"
-  case "${CLONE_STATUS}" in
-    disabled) clone_execution="disabled by policy" ;;
-    no-repositories) clone_execution="no repository links found" ;;
-    skipped) clone_execution="skipped by confirmation policy" ;;
-    completed) clone_execution="executed" ;;
-  esac
-
-  {
-    echo "## Repository Workspace"
-    echo "- Repository links detected: ${REPO_LINK_COUNT}"
-    echo "- Clone policy: ${CLONE_POLICY}"
-    echo "- Clone execution: ${clone_execution}"
-    echo "- Local repositories available: ${LOCAL_REPO_COUNT}"
-    if [[ -z "${CLONE_REPORT_LINES}" ]]; then
-      echo "- No clone actions recorded."
-    else
-      printf '%s' "${CLONE_REPORT_LINES}"
-    fi
-    if [[ -n "${LOCAL_REPO_CONTEXT_LINES}" ]]; then
-      echo
-      echo "### Local Repository Snapshot"
-      printf '%s' "${LOCAL_REPO_CONTEXT_LINES}"
-    fi
-  }
-}
-
-build_consolidated_context_section() {
-  {
-    echo "## Consolidated Context"
-    echo "- Issue key: ${ISSUE_KEY}"
-    echo "- Summary: ${SUMMARY}"
-    echo "- Status: ${STATUS}"
-    echo "- Assignee: ${ASSIGNEE}"
-    echo "- Reporter: ${REPORTER}"
-    echo "- Comments captured: ${COMMENTS_COUNT}"
-    echo "- Repository links detected: ${REPO_LINK_COUNT}"
-    echo "- Local repositories available: ${LOCAL_REPO_COUNT}"
-    if [[ "${LOCAL_REPO_COUNT}" != "0" ]]; then
-      echo "- Repository root: \`$(display_path "${TARGET_DIR}/repos")\`"
-    fi
-  }
-}
-
-build_plan_handoff_section() {
-  local plan_display=""
-  local summary_display=""
-  local spec_display=""
-  local repos_display=""
-  plan_display="$(display_path "${PLAN_FILE}")"
-  summary_display="$(display_path "${SUMMARY_FILE}")"
-  spec_display="$(display_path "${SPEC_FILE}")"
-  repos_display="$(display_path "${TARGET_DIR}/repos")"
-
-  {
-    echo "## Planning Handoff"
-    echo "- Consolidation order: clone repositories (when available) -> consolidate issue + repository context -> run \`/plan\`."
-    echo "- Suggested \`/plan\` context:"
-    echo "  - \`${spec_display}\`"
-    echo "  - \`${summary_display}\`"
-    echo "  - \`${plan_display}\`"
-    if [[ "${LOCAL_REPO_COUNT}" != "0" ]]; then
-      echo "  - local repositories under \`${repos_display}\`"
-    else
-      echo "  - no local repositories available (plan only from Jira context)"
-    fi
-  }
-}
-
-cat > "${SPEC_FILE}" <<EOF
-# ${ISSUE_KEY} - Technical Spec
-
-## Jira Context
-- Source issue: ${ISSUE}
-- Jira URL: ${ISSUE_URL}
-- Summary: ${SUMMARY}
-- Status: ${STATUS}
-- Assignee: ${ASSIGNEE}
-- Reporter: ${REPORTER}
-
-## Problem Statement
-${DESCRIPTION:-No Jira description available.}
-
-## Scope
-- Define solution approach.
-- Identify impacted systems and repositories.
-- Break down delivery in implementation phases.
-
-## Open Questions
-- [ ] Confirm business constraints and acceptance criteria.
-- [ ] Confirm dependencies with other teams.
-- [ ] Confirm rollout strategy and observability requirements.
-EOF
-
-log_step "Generating base documentation artifacts."
-cat > "${PLAN_FILE}" <<EOF
-# ${ISSUE_KEY} - Implementation Plan
-
-- Source issue: ${ISSUE}
-- Jira URL: ${ISSUE_URL}
-- Mode: ${MODE}
-- Workspace strategy: ${WORKSPACE_STRATEGY}
-- Clone policy: ${CLONE_POLICY}
-
-## Phase 1 - Discovery
-- Analyze requirements from Jira description and comments.
-- Validate technical constraints and impacted services.
-
-## Phase 2 - Implementation
-- Define concrete code changes by repository/module.
-- Plan migrations/config changes if required.
-
-## Phase 3 - Validation
-- Define test strategy (unit/integration/manual).
-- Define rollout checks and rollback path.
-EOF
-
-cat > "${CHECKLIST_FILE}" <<EOF
-# ${ISSUE_KEY} - Delivery Checklist
-
-## Analysis
-- [ ] Read Jira description, comments, and linked issues.
-- [ ] Confirm acceptance criteria.
-- [ ] Confirm impacted repositories and services.
-
-## Build
-- [ ] Implement planned changes.
-- [ ] Add/update tests.
-- [ ] Update docs and runbooks if needed.
-
-## Verification
-- [ ] Run test suite.
-- [ ] Validate observability and alerts.
-- [ ] Prepare rollout and rollback notes.
-EOF
-
-{
-  echo "# ${ISSUE_KEY} - Jira Summary"
-  echo
-  echo "- Source issue: ${ISSUE}"
-  echo "- Jira URL: ${ISSUE_URL}"
-  echo "- Summary: ${SUMMARY}"
-  echo "- Status: ${STATUS}"
-  echo "- Assignee: ${ASSIGNEE}"
-  echo "- Reporter: ${REPORTER}"
-  echo
-  echo "## Description"
-  echo "${DESCRIPTION:-No Jira description available.}"
-  echo
-  echo "## Recent Comments"
-  if ! printf '%s' "${ISSUE_JSON}" | jq -e '.comments | length > 0' >/dev/null; then
-    echo "- No comments found."
-  else
-    printf '%s' "${ISSUE_JSON}" | jq -r '.comments[] | "- " + .'
-  fi
-  echo
-  echo "## Repository Links"
-  if ! printf '%s' "${ISSUE_JSON}" | jq -e '.repo_urls | length > 0' >/dev/null; then
-    echo "- No repository links detected."
-  else
-    printf '%s' "${ISSUE_JSON}" | jq -r '.repo_urls[] | "- " + .'
-  fi
-} > "${SUMMARY_FILE}"
-
-clone_repo_url() {
-  local url="$1"
-  local destination="$2"
-  if [[ "${url}" =~ github\.com/([^/]+/[^/.]+)(\.git)?$ ]] && command -v gh >/dev/null 2>&1; then
-    local repo="${BASH_REMATCH[1]}"
-    gh repo clone "${repo}" "${destination}"
-    return
-  fi
-  git clone "${url}" "${destination}"
-}
-
-clone_repositories_if_needed() {
-  local should_clone="yes"
-  local answer=""
-  local repo_name=""
-  local dest=""
-  local dest_display=""
-
-  if [[ "${CLONE_POLICY}" == "off" ]]; then
-    CLONE_STATUS="disabled"
-    append_clone_report_line "Repository clone step disabled by --clone off."
-    log_info "Clone stage skipped by policy (clone=off)."
-    return
-  fi
-
-  if [[ "${REPO_LINK_COUNT}" == "0" ]]; then
-    CLONE_STATUS="no-repositories"
-    append_clone_report_line "No repository links were detected in the Jira issue."
-    log_info "Clone stage skipped because no repository links were detected."
-    return
-  fi
-
-  if [[ "${CLONE_POLICY}" == "ask" ]]; then
-    should_clone="no"
-    if [[ -t 0 ]]; then
-      if ! read -r -p "Clone detected repositories now? [y/N] " answer; then
-        answer=""
-      fi
-      case "${answer}" in
-        y|Y|yes|YES) should_clone="yes" ;;
-      esac
-    fi
-  fi
-
-  if [[ "${should_clone}" != "yes" ]]; then
-    CLONE_STATUS="skipped"
-    append_clone_report_line "Repository clone step skipped (policy ask without positive confirmation)."
-    log_info "Clone stage skipped (clone=ask without positive confirmation)."
-    return
-  fi
-
-  log_step "Cloning detected repositories."
-  CLONE_STATUS="completed"
-  mkdir -p "${TARGET_DIR}/repos"
-  while IFS= read -r url; do
-    repo_name="$(basename "${url}" .git)"
-    repo_name="${repo_name%%\?*}"
-    dest="${TARGET_DIR}/repos/${repo_name}"
-    dest_display="${dest#./}"
-    if [[ -d "${dest}" ]]; then
-      echo "Repository already exists, skipping: ${dest}"
-      append_clone_report_line "Already present: \`${dest_display}\` (source: ${url})."
-      continue
-    fi
-    log_info "Cloning ${url} -> ${dest_display}"
-    if clone_repo_url "${url}" "${dest}"; then
-      append_clone_report_line "Cloned: \`${dest_display}\` (source: ${url})."
-    else
-      log_info "Failed to clone ${url}"
-      append_clone_report_line "Failed: ${url}."
-    fi
-  done < <(printf '%s' "${ISSUE_JSON}" | jq -r '.repo_urls[]')
-}
-
-collect_local_repositories_context() {
-  local repo_dir=""
-  local rel_path=""
-  local origin=""
-  local branch=""
-  local head=""
-
-  LOCAL_REPO_COUNT="0"
-  LOCAL_REPO_CONTEXT_LINES=""
-
-  if [[ ! -d "${TARGET_DIR}/repos" ]]; then
-    return
-  fi
-
-  while IFS= read -r repo_dir; do
-    ((LOCAL_REPO_COUNT+=1))
-    rel_path="$(display_path "${repo_dir}")"
-    if git -C "${repo_dir}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-      origin="$(git -C "${repo_dir}" config --get remote.origin.url 2>/dev/null || true)"
-      branch="$(git -C "${repo_dir}" symbolic-ref --short HEAD 2>/dev/null || true)"
-      head="$(git -C "${repo_dir}" rev-parse --short HEAD 2>/dev/null || true)"
-      [[ -n "${origin}" ]] || origin="unknown"
-      [[ -n "${branch}" ]] || branch="detached-or-unknown"
-      [[ -n "${head}" ]] || head="unknown"
-      append_local_repo_context_line "\`${rel_path}\` (branch: ${branch}, head: ${head}, origin: ${origin})."
-    else
-      append_local_repo_context_line "\`${rel_path}\` (not a git repository)."
-    fi
-  done < <(find "${TARGET_DIR}/repos" -mindepth 1 -maxdepth 1 -type d | sort)
-}
-
+log_step "Materializing repositories (when available)."
 clone_repositories_if_needed
-log_step "Consolidating repository context for planning."
-collect_local_repositories_context
 
-REPOSITORY_WORKSPACE_SECTION="$(build_repository_workspace_section)"
-CONSOLIDATED_CONTEXT_SECTION="$(build_consolidated_context_section)"
-PLAN_HANDOFF_SECTION="$(build_plan_handoff_section)"
+log_step "Analyzing local repositories to enrich implementation plan."
+analyze_cloned_repositories
 
+log_step "Generating implementation plan output."
 {
+  echo "# ${ISSUE_KEY} - Implementation Plan"
   echo
-  printf '%s\n' "${REPOSITORY_WORKSPACE_SECTION}"
+  summarize_issue_context
   echo
-  printf '%s\n' "${CONSOLIDATED_CONTEXT_SECTION}"
+  build_repository_section
   echo
-  printf '%s\n' "${PLAN_HANDOFF_SECTION}"
-} >> "${PLAN_FILE}"
+  echo "## Code Analysis"
+  if [[ -n "${CODE_ANALYSIS_LINES}" ]]; then
+    printf '%s' "${CODE_ANALYSIS_LINES}"
+  else
+    echo "- No repository analysis available."
+  fi
+  echo
+  build_ready_plan_section
+} > "${PLAN_FILE}"
 
-{
-  echo
-  printf '%s\n' "${REPOSITORY_WORKSPACE_SECTION}"
-  echo
-  printf '%s\n' "${CONSOLIDATED_CONTEXT_SECTION}"
-  echo
-  printf '%s\n' "${PLAN_HANDOFF_SECTION}"
-} >> "${SUMMARY_FILE}"
-
-echo "Generated files:"
-echo "- ${SPEC_FILE}"
+echo "Generated file:"
 echo "- ${PLAN_FILE}"
-echo "- ${CHECKLIST_FILE}"
-echo "- ${SUMMARY_FILE}"
 
 if [[ "${MODE}" == "plan" ]]; then
-  log_step "Planning handoff ready."
-  echo "Next conversational step: run /plan using $(display_path "${PLAN_FILE}") and $(display_path "${SUMMARY_FILE}")."
+  log_step "Plan ready for execution (/plan)."
+  echo "Next conversational step: run /plan using $(display_path "${PLAN_FILE}")."
 fi

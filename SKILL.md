@@ -1,6 +1,6 @@
 ---
 name: jira
-description: Generate technical planning artifacts from a Jira issue key or URL. Use when the user asks to plan work or run the implementation flow from Jira context, summarize Jira data, extract repository links, prepare a delivery checklist, or explicitly invokes $jira.
+description: Build a ready-to-implement technical plan from a Jira issue key or URL, including repository cloning and code-aware analysis when repo links are present. Use when the user asks to plan or execute work from Jira context, or explicitly invokes $jira.
 ---
 
 # Jira Integration Skill
@@ -20,10 +20,12 @@ Default behavior (low friction):
    - `clone=auto`
    - `confirm=off`
 3. Execute directly without confirmation prompts.
-4. If `mode=plan`, finish with planning handoff:
-   - clone first (when links exist and clone is enabled);
-   - consolidate issue + repository context from generated docs;
-   - run `/plan` using that consolidated context in the same user request.
+4. In `mode=plan`, finish the whole flow in the same user request:
+   - read full Jira context;
+   - clone listed repositories (when available and enabled);
+   - analyze local code to identify likely change areas;
+   - produce a ready-to-implement plan;
+   - run `/plan` (or equivalent inline output) using that plan.
 
 On-demand confirmation:
 - If the user explicitly asks for confirmation, set `confirm=ask` and show a short summary before execution.
@@ -34,7 +36,7 @@ Validation rules:
 
 Execution rule:
 - Always execute through `scripts/jira_bootstrap.sh` with resolved values (single source of truth).
-- For `mode=plan`, use `docs/<ISSUE>-implementation-plan.md` and `docs/<ISSUE>-jira-summary.md` as `/plan` input.
+- For `mode=plan`, use `docs/<ISSUE>-implementation-plan.md` as `/plan` input.
 - If `repos/` exists, include repository analysis in the planning step.
 - Do not pause waiting for an extra user message between bootstrap and planning unless blocked.
 
@@ -56,10 +58,7 @@ Implementation rule:
 
 ## Generated Files
 
-- `<workspace>/docs/<ISSUE>-spec.md`
 - `<workspace>/docs/<ISSUE>-implementation-plan.md`
-- `<workspace>/docs/<ISSUE>-checklist.md`
-- `<workspace>/docs/<ISSUE>-jira-summary.md`
 
 When repository links are present and clone is enabled:
 - `<workspace>/repos/<repo-name>`

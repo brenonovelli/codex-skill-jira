@@ -109,7 +109,7 @@ $jira VA-1234
 Comportamento padrão:
 - usa defaults (`mode=plan`, `workspace=feature-folder`, `clone=auto`);
 - com `clone=auto`, clona os repositórios detectados em `repos/` no modo `plan` e no `run`;
-- no `mode=plan`, consolida contexto de issue + repos e deixa o handoff pronto para `/plan`;
+- no `mode=plan`, lê a issue completa, clona repositórios, analisa código e gera um plano pronto para implementação;
 - no fluxo conversacional, bootstrap + planejamento devem acontecer no mesmo pedido do usuário;
 - executa sem confirmação interativa.
 
@@ -124,10 +124,7 @@ Você também pode mencionar issues de forma natural na conversa:
 ## Arquivos Gerados
 
 Para cada issue:
-- `docs/<ISSUE>-spec.md`
 - `docs/<ISSUE>-implementation-plan.md`
-- `docs/<ISSUE>-checklist.md`
-- `docs/<ISSUE>-jira-summary.md`
 
 Quando houver links de repositório e clone habilitado:
 - `repos/<repo-name>`
@@ -181,12 +178,11 @@ Conclusão atual:
 
 - `jira_bootstrap.sh` passou a usar `clone=auto` por default.
 - a etapa de clone não depende mais de `mode=run` (também executa em `plan`).
-- os artefatos de plano e resumo agora incluem uma seção `Repository Workspace` com resultado da materialização de repositórios.
+- o plano único agora inclui resultado de materialização de repositórios e análise do código local.
 
 ### 2026-03-04 - Handoff determinístico para `/plan`
 
-- ordem do fluxo em `mode=plan`: clonar (quando houver repos) -> consolidar contexto -> handoff para `/plan`.
-- os artefatos incluem contexto consolidado para reduzir retrabalho e aumentar precisão do planejamento.
+- ordem do fluxo em `mode=plan`: ler issue completa -> clonar repos (quando houver) -> analisar código -> montar plano pronto para implementação -> handoff para `/plan`.
 
 ### 2026-03-04 - Fricção observada na instalação conversacional
 
