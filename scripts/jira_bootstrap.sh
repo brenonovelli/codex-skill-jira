@@ -158,7 +158,7 @@ extract_keywords() {
     | tr -cs 'a-z0-9' '\n' \
     | awk 'length($0) >= 4' \
     | awk '!seen[$0]++' \
-    | head -n 8
+    | awk 'NR<=8'
 }
 
 build_search_regex_from_issue() {
@@ -325,7 +325,7 @@ analyze_single_repository() {
     -not -name 'node_modules' \
     | sed "s#^${repo_dir}/##" \
     | sort \
-    | head -n 8 \
+    | awk 'NR<=8' \
     | paste -sd ', ' -)"
   [[ -n "${top_areas}" ]] || top_areas="root-only"
 
@@ -354,7 +354,7 @@ analyze_single_repository() {
   if [[ -n "${issue_search_regex}" ]]; then
     matches="$(rg -i --files-with-matches -g '!**/.git/**' -g '!**/node_modules/**' -g '!**/dist/**' -g '!**/build/**' "${issue_search_regex}" "${repo_dir}" 2>/dev/null \
       | sed "s#^${repo_dir}/##" \
-      | head -n 10 \
+      | awk 'NR<=10' \
       | paste -sd ', ' -)"
   fi
   [[ -n "${matches}" ]] || matches="no direct keyword match found"
