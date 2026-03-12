@@ -25,6 +25,7 @@ COMMENTS_COUNT="0"
 REPO_LINK_COUNT="0"
 TARGET_DIR=""
 PLAN_FILE=""
+CODE_WORKSPACE_FILE=""
 
 CLONE_STATUS="not-run"
 CLONE_REPORT_LINES=""
@@ -151,6 +152,30 @@ display_path() {
   printf '%s' "${path#./}"
 }
 
+repo_name_from_url() {
+  local url="$1"
+  local repo_name=""
+
+  repo_name="$(basename "${url}" .git)"
+  repo_name="${repo_name%%\?*}"
+  printf '%s' "${repo_name}"
+}
+
+collect_existing_repo_dirs() {
+  local url=""
+  local repo_name=""
+  local repo_dir=""
+
+  while IFS= read -r url; do
+    [[ -n "${url}" ]] || continue
+    repo_name="$(repo_name_from_url "${url}")"
+    repo_dir="${TARGET_DIR}/${repo_name}"
+    if [[ -d "${repo_dir}" ]]; then
+      printf '%s\n' "${repo_dir}"
+    fi
+  done < <(printf '%s' "${ISSUE_JSON}" | jq -r '.repo_urls[]')
+}
+
 extract_keywords() {
   local raw_text="$1"
   printf '%s\n' "${raw_text}" \
@@ -215,6 +240,7 @@ clone_repo_url() {
 clone_repositories_if_needed() {
   local should_clone="yes"
   local answer=""
+  local url=""
   local repo_name=""
   local dest=""
   local dest_display=""
@@ -254,12 +280,10 @@ clone_repositories_if_needed() {
 
   CLONE_STATUS="completed"
   log_step "Cloning detected repositories."
-  mkdir -p "${TARGET_DIR}/repos"
 
   while IFS= read -r url; do
-    repo_name="$(basename "${url}" .git)"
-    repo_name="${repo_name%%\?*}"
-    dest="${TARGET_DIR}/repos/${repo_name}"
+    repo_name="$(repo_name_from_url "${url}")"
+    dest="${TARGET_DIR}/${repo_name}"
     dest_display="$(display_path "${dest}")"
 
     if [[ -d "${dest}" ]]; then
@@ -276,6 +300,44 @@ clone_repositories_if_needed() {
       log_info "Failed to clone ${url}"
     fi
   done < <(printf '%s' "${ISSUE_JSON}" | jq -r '.repo_urls[]')
+}
+
+generate_code_workspace_if_needed() {
+  local repo_dir=""
+  local repo_name=""
+  local repo_count=0
+  local repo_folders_json="[]"
+
+  CODE_WORKSPACE_FILE=""
+
+  while IFS= read -r repo_dir; do
+    [[ -n "${repo_dir}" ]] || continue
+    repo_name="$(basename "${repo_dir}")"
+    repo_folders_json="$(
+      jq -n \
+        --argjson current "${repo_folders_json}" \
+        --arg path "${repo_name}" \
+        '$current + [{path: $path}]'
+    )"
+    ((repo_count+=1))
+  done < <(collect_existing_repo_dirs | sort)
+
+  if (( repo_count < 2 )); then
+    return
+  fi
+
+  CODE_WORKSPACE_FILE="${TARGET_DIR}/${ISSUE_KEY}.code-workspace"
+  jq -n \
+    --argjson repoFolders "${repo_folders_json}" \
+    '{
+      folders: ([{path: "docs"}] + $repoFolders),
+      settings: {
+        "git.autoRepositoryDetection": true,
+        "git.repositoryScanMaxDepth": 2
+      }
+    }' > "${CODE_WORKSPACE_FILE}"
+
+  log_info "Generated multi-repo workspace file: $(display_path "${CODE_WORKSPACE_FILE}")"
 }
 
 analyze_single_repository() {
@@ -385,18 +447,15 @@ analyze_cloned_repositories() {
   IMPLEMENTATION_STEPS_LINES=""
   RISK_LINES=""
 
-  if [[ ! -d "${TARGET_DIR}/repos" ]]; then
-    return
-  fi
-
   raw_issue_text="${SUMMARY}
 ${DESCRIPTION}
 $(printf '%s' "${ISSUE_JSON}" | jq -r '.comments[]?' 2>/dev/null || true)"
   search_regex="$(build_search_regex_from_issue "${raw_issue_text}")"
 
   while IFS= read -r repo_dir; do
+    [[ -n "${repo_dir}" ]] || continue
     analyze_single_repository "${repo_dir}" "${search_regex}"
-  done < <(find "${TARGET_DIR}/repos" -mindepth 1 -maxdepth 1 -type d | sort)
+  done < <(collect_existing_repo_dirs | sort)
 
   if [[ "${LOCAL_REPO_COUNT}" == "0" ]]; then
     append_line CODE_ANALYSIS_LINES "- No local repositories available for code analysis."
@@ -432,6 +491,12 @@ build_repository_section() {
       echo "### Local Repository Snapshot"
       printf '%s' "${LOCAL_REPO_CONTEXT_LINES}"
     fi
+    if [[ -n "${CODE_WORKSPACE_FILE}" ]]; then
+      echo
+      echo "### Multi-repo Workspace"
+      echo "- Workspace file: $(display_path "${CODE_WORKSPACE_FILE}")"
+      echo "- Operational guidance: in Cursor/VS Code, open the .code-workspace file (not only the parent folder) to keep SCM detection correct for all repositories."
+    fi
   }
 }
 
@@ -452,6 +517,11 @@ build_ready_plan_section() {
     else
       echo "- Define validation commands per repository."
     fi
+    echo
+    echo "### Testing Guidance"
+    echo "- Prioritize tests as a first-class deliverable for each code change."
+    echo "- Prefer TDD whenever it is practical in the repository context."
+    echo "- Proceed without tests only in rare and explicitly justified exceptions."
     echo
     echo "### Risks and Dependencies"
     if [[ -n "${RISK_LINES}" ]]; then
@@ -589,6 +659,9 @@ PLAN_FILE="${TARGET_DIR}/docs/${ISSUE_KEY}-implementation-plan.md"
 log_step "Materializing repositories (when available)."
 clone_repositories_if_needed
 
+log_step "Preparing workspace metadata for multi-repository scenarios."
+generate_code_workspace_if_needed
+
 log_step "Analyzing local repositories to enrich implementation plan."
 analyze_cloned_repositories
 
@@ -612,6 +685,10 @@ log_step "Generating implementation plan output."
 
 echo "Generated file:"
 echo "- ${PLAN_FILE}"
+if [[ -n "${CODE_WORKSPACE_FILE}" ]]; then
+  echo "- ${CODE_WORKSPACE_FILE}"
+  echo "Operational note: in multi-repo scenarios, open the .code-workspace file in Cursor/VS Code for correct SCM repository detection."
+fi
 
 if [[ "${MODE}" == "plan" ]]; then
   log_step "Plan ready for execution (/plan)."
